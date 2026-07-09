@@ -1,30 +1,38 @@
 // ==UserScript==
 // @name         Twitter Experience Manager
 // @namespace    https://github.com/HyperboreanSlug/Twitter-Experience-Manager
-// @version      1.0.0
-// @description  Modular X/Twitter usability toolkit: track followers, sort following by following-count, and filter/block timeline accounts by self-reported region (South Asia focus). Console paste or Greasemonkey.
+// @version      1.1.0
+// @description  X usability toolkit: follower tracker, soft region hide, optional geo block, mute like-notifications. Console paste or userscript.
 // @author       HyperboreanSlug
 // @license      MIT
+// @homepageURL  https://github.com/HyperboreanSlug/Twitter-Experience-Manager
+// @supportURL   https://github.com/HyperboreanSlug/Twitter-Experience-Manager/issues
+// @downloadURL  https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js
+// @updateURL    https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js
 // @match        https://x.com/*
 // @match        https://mobile.x.com/*
 // @match        https://twitter.com/*
 // @match        https://mobile.twitter.com/*
 // @icon         https://www.google.com/s2/favicons?domain=twitter.com
 // @grant        none
+// @inject-into  page
 // @run-at       document-idle
+// @noframes
+// @compatible   violentmonkey
+// @compatible   tampermonkey
+// @compatible   greasemonkey
 // ==/UserScript==
 
 /*
  * Twitter Experience Manager
  * ==========================
- * Usability-focused companion to Tweepcred Manager. Same dual-mode packaging
- * (console paste + persistent userscript) and modular src/ layout.
+ * Dual-mode: console paste + persistent userscript (Violentmonkey / Tampermonkey /
+ * Greasemonkey). @grant none + @inject-into page so fetch/cookies match the page.
  *
- *   • Followers – snapshot followers; sort Following by following-count
- *   • Geo Guard – watch the Home timeline and auto-block (or log) accounts
- *                 whose public profile location matches South Asia / India rules
+ *   • Followers  – snapshot followers; sort Following by following-count
+ *   • Geo Guard  – soft-hide (and optionally block) timeline posts by region needles
+ *   • Notifs     – hide “liked your post” style notification rows
  *
- * ⚠ Automating X is against its Terms of Service and can get accounts locked.
- *   Region matching uses self-reported profile text only — false positives
- *   and false negatives are expected. Use dry-run first. Use at your own risk.
+ * ⚠ Automating X is against its Terms of Service. Region matching uses
+ *   self-reported profile text only. Prefer soft-hide over live block.
  */

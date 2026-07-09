@@ -4,25 +4,31 @@
 
 ## Purpose
 
-Watch the Home timeline (and other tweet lists), resolve each author with `UserByScreenName`, and **log or auto-block** accounts whose **self-reported** profile location (optional: bio) matches configurable region needles.
+Watch the Home timeline (and other tweet lists), resolve each author with `UserByScreenName`, then:
 
-Default needles cover **India + South Asia** place names, country names, and a few symbols/scripts. Editable in the UI.
+1. **Soft hide** matching posts in the DOM (default ON — recommended)
+2. Optionally **live-block** (default OFF via “Do not live-block”)
+
+Matching uses **self-reported** profile location (optional: bio) against configurable region needles (default India + South Asia).
 
 ## Public API
 
 | Member | Description |
 |--------|-------------|
 | `GeoGuard.startWatch()` / `stopWatch()` | MutationObserver + async queue |
-| `GeoGuard.scanDom()` | Collect handles from `article[data-testid=tweet]` |
-| `GeoGuard.evaluateHandle(h)` | Lookup → match → dry-run or `Core.blockUser` |
+| `GeoGuard.scanDom()` | Collect handles; re-apply soft hides |
+| `GeoGuard.evaluateHandle(h)` | Lookup → match → soft-hide → optional block |
+| `GeoGuard.hideArticlesForHandle(h)` | Soft-hide tweets by author |
+| `GeoGuard.unhideAll()` | Undo soft hides on current page |
 | `GeoGuard.matchRegion(profile)` | Needle + Devanagari heuristic |
 
 ## Safety defaults
 
-- **Dry-run ON** by default  
-- Whitelist never blocked  
+- **Soft hide ON** by default  
+- **Do not live-block ON** by default  
+- Whitelist never hide/block  
 - ~1.1–1.45 s delay between lookups  
-- Session + persistent block history in `localStorage`
+- `data-tem-geo-hidden="1"` marks hidden nodes
 
 ## Limitations
 

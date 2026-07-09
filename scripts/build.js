@@ -17,6 +17,7 @@ const ORDER = [
   path.join(modulesDir, 'ui.js'),
   path.join(modulesDir, 'followers.js'),
   path.join(modulesDir, 'geoguard.js'),
+  path.join(modulesDir, 'notifmute.js'),
   path.join(modulesDir, 'about.js'),
   path.join(src, 'boot.js'),
   path.join(src, 'footer.js'),

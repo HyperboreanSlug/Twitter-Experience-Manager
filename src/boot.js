@@ -2,21 +2,37 @@
  * @module boot
  * @see docs/modules/bootstrap.md
  */
-    Core.init();
-    UI.build();
-    Followers.render();
-    Followers.firstShow = false;
-    GeoGuard.render();
-    GeoGuard.firstShow = false;
-    About.render();
-    UI.switchTab('followers');
+    function temBoot() {
+        if (!document.body && !document.documentElement) {
+            setTimeout(temBoot, 50);
+            return;
+        }
+        Core.init();
+        UI.build();
+        Followers.render();
+        Followers.firstShow = false;
+        GeoGuard.render();
+        GeoGuard.firstShow = false;
+        NotifMute.render();
+        NotifMute.firstShow = false;
+        About.render();
+        UI.switchTab('followers');
 
-    if (Core.store.get('geoAutoStart', false)) {
-        // Defer so the first paint settles
-        setTimeout(() => { try { GeoGuard.startWatch(); } catch (_) { } }, 1500);
+        // Auto-start modules (persisted prefs). Defer so X's SPA shell settles.
+        setTimeout(function () {
+            try {
+                if (Core.store.get('geoAutoStart', false)) GeoGuard.startWatch();
+            } catch (_) { }
+            try {
+                if (Core.store.get('likeMuteAutoStart', true)) NotifMute.startWatch();
+            } catch (_) { }
+        }, 1200);
+
+        console.log(
+            '%c✦ Twitter Experience Manager v' + Core.version + ' ready. @' + (Core.username || '?') +
+            ' (Violentmonkey / Tampermonkey / console)',
+            'color:#7856ff;font-weight:bold;font-size:14px'
+        );
     }
 
-    console.log(
-        '%c✦ Twitter Experience Manager v' + Core.version + ' ready. @' + (Core.username || '?'),
-        'color:#7856ff;font-weight:bold;font-size:14px'
-    );
+    temBoot();

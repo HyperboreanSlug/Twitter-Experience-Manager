@@ -6,19 +6,20 @@
 </p>
 
 <p align="center">
-  Console paste · Greasemonkey/Tampermonkey · No API keys · Local session only
+  Console paste · <strong>Violentmonkey</strong> / Tampermonkey · No API keys · Local session only
 </p>
 
 ---
 
-> **Warning: Use at your own risk.** Automating X is against its Terms of Service and **can get your account locked or banned**. Geo Guard’s location matching uses **self-reported profile text only** — not identity. Prefer dry-run mode. Everything runs in your browser.
+> **Warning: Use at your own risk.** Automating X is against its Terms of Service and **can get your account locked or banned**. Geo Guard’s location matching uses **self-reported profile text only** — not identity. Prefer **soft hide** over live block. Everything runs in your browser.
 
 ## Features
 
 | Tab | What it does |
 | --- | --- |
 | **Followers** | Snapshot your Followers list over time (diff new/lost). Scan **Following** and **sort by each account’s following count**. Export CSV/JSON. |
-| **Geo Guard** | Watch the Home timeline, look up authors, match location needles (default: **India + South Asia**), and **log or auto-block**. Dry-run on by default. Whitelist supported. |
+| **Geo Guard** | Watch the timeline, look up authors, match location needles (default: **India + South Asia**). **Soft-hide** matching posts by default; optional live-block (off by default). Whitelist supported. |
+| **Notifs** | Hide **“liked your post”** (and similar) notification rows on `/notifications` — client-side only. Auto-starts by default. |
 | **About** | Docs pointer + warnings |
 
 Same visual language as [Tweepcred Manager](https://github.com/HyperboreanSlug/Tweepcred-Manager) (dark glass panel, modular `src/modules`, dual console/userscript build).
@@ -32,14 +33,18 @@ Same visual language as [Tweepcred Manager](https://github.com/HyperboreanSlug/T
 3. Paste [`dist/twitter-experience-manager.user.js`](dist/twitter-experience-manager.user.js)
 4. Panel appears top-right
 
-### Greasemonkey / Tampermonkey (persistent)
+### Violentmonkey (recommended) / Tampermonkey / Greasemonkey
 
-Install the same `dist/twitter-experience-manager.user.js` file as a userscript (`@grant none`, `@run-at document-idle`). It auto-loads on x.com / twitter.com.
+1. Install [Violentmonkey](https://violentmonkey.github.io/).
+2. **New** → paste contents of `dist/twitter-experience-manager.user.js`, **or** open the [raw user.js URL](https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js) and confirm install.
+3. Visit x.com while logged in — panel loads at `document-idle`.
+
+**Userscript metadata (VM-compatible):** `@grant none`, `@inject-into page`, `@run-at document-idle`, `@noframes`. No `GM_*` APIs — the same file works as a console paste.
 
 ## Project layout
 
 ```
-src/modules/     # core, follow, ui, followers, geoguard, about
+src/modules/     # core, follow, ui, followers, geoguard, notifmute, about
 docs/modules/    # per-module maintenance docs
 scripts/build.js # concatenates → dist/*.user.js
 IDEAS.md         # future feature ideas with pros/cons
@@ -53,9 +58,17 @@ node scripts/build.js
 
 - Default needles are place/country substrings (Mumbai, Delhi, Pakistan, Bangladesh, …) plus optional Devanagari-in-location heuristic.
 - Edit needles and whitelist in the UI; stored under `localStorage` keys `tem:geoNeedles`, `tem:geoWhitelist`.
-- **Dry-run** logs matches without calling `blocks/create`.
+- **Soft hide** (default ON): sets `display:none` on matching tweet cells — no block API.
+- **Do not live-block** (default ON): never calls `blocks/create` unless you uncheck it.
 - Profile lookups are delayed (~1.1s+) to reduce rate-limit pressure.
 - False positives: tourists, diaspora, joke locations, shared city names. False negatives: empty location fields.
+
+## Like notification mute
+
+- Open **Notifs** tab (watcher auto-starts by default).
+- Visit `x.com/notifications` — rows whose text matches patterns like `liked your post` are hidden.
+- Does **not** change X account settings; only this browser session’s DOM.
+- Unhide button restores currently hidden rows; patterns are editable.
 
 ## Followers notes
 

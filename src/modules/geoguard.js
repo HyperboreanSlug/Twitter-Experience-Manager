@@ -1,6 +1,6 @@
 /**
  * @module geoguard
- * @description Timeline account watcher + region-based auto-block (self-reported location).
+ * @description Timeline watcher: soft region hide + optional auto-block (self-reported location).
  * @see docs/modules/geoguard.md
  */
     const GeoGuard = {
@@ -9,13 +9,16 @@
         observer: null,
         queue: [],
         processing: false,
-        seen: new Set(),       // handles already evaluated this session
+        seen: new Set(),            // handles already evaluated this session
+        matchedHandles: new Set(),  // lowercased handles that matched region
         blockedThisSession: 0,
         matchedThisSession: 0,
+        hiddenThisSession: 0,
         scannedThisSession: 0,
         logLines: [],
-        profileCache: {},      // handle -> { location, description, match, reason }
+        profileCache: {},           // handle -> profile + match meta
         delayMs: 1100,
+        _scanScheduled: false,
 
         // Default South Asia / India location needles (case-insensitive substring).
         // Editable in the UI; stored in localStorage.
@@ -57,6 +60,7 @@
             const needles = Core.store.get('geoNeedles', this.defaultNeedles).join('\n');
             const whitelist = (Core.store.get('geoWhitelist', []) || []).join('\n');
             const dryRun = Core.store.get('geoDryRun', true);
+            const softHide = Core.store.get('geoSoftHide', true);
             const autoStart = Core.store.get('geoAutoStart', false);
             const useBio = Core.store.get('geoUseBio', false);
 
@@ -64,23 +68,28 @@
               <div class="tem-warn-box">
                 Matches <strong>self-reported</strong> profile location (and optional bio) text only —
                 not IP, passport, or ethnicity. Expect false positives/negatives.
-                Auto-block is against X ToS. Prefer <strong>dry-run</strong> first.
+                Prefer <strong>soft hide</strong> (client-side) over live block (ToS risk).
               </div>
 
               <div class="tem-section">
                 <h4>Timeline Geo Guard</h4>
-                <p>Watches Home (and any timeline with tweets), looks up authors, and blocks or logs accounts matching your region needles (default: India + South Asia).</p>
-                <div class="tem-stats">
+                <p>Looks up authors on the timeline. Matching accounts can be <strong>soft-hidden</strong> (DOM only) and/or blocked.</p>
+                <div class="tem-stats" style="grid-template-columns:repeat(4,1fr)">
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-g-scanned">0</div><div class="tem-stat-l">Scanned</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-g-matched">0</div><div class="tem-stat-l">Matched</div></div>
+                  <div class="tem-stat"><div class="tem-stat-v" id="tem-g-hidden">0</div><div class="tem-stat-l">Hidden</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-g-blocked">0</div><div class="tem-stat-l">Blocked</div></div>
                 </div>
-                <label class="tem-check"><input type="checkbox" id="tem-g-dry" ${dryRun ? 'checked' : ''}> Dry-run only (log matches, do not block)</label>
+                <label class="tem-check"><input type="checkbox" id="tem-g-soft" ${softHide ? 'checked' : ''}> <strong>Soft hide</strong> matching posts (recommended; reversible in-session)</label>
+                <label class="tem-check"><input type="checkbox" id="tem-g-dry" ${dryRun ? 'checked' : ''}> Do not live-block (log only for block path)</label>
                 <label class="tem-check"><input type="checkbox" id="tem-g-bio" ${useBio ? 'checked' : ''}> Also match bio / description text</label>
                 <label class="tem-check"><input type="checkbox" id="tem-g-autostart" ${autoStart ? 'checked' : ''}> Auto-start watch when script loads</label>
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-primary" id="tem-g-start" type="button">Start watching timeline</button>
                   <button class="tem-btn tem-btn-ghost" id="tem-g-stop" type="button" disabled>Stop</button>
+                </div>
+                <div class="tem-btns">
+                  <button class="tem-btn tem-btn-ghost" id="tem-g-unhide" type="button">Unhide soft-hidden posts</button>
                 </div>
                 <div class="tem-status idle" id="tem-g-status">Idle</div>
                 <div class="tem-now" id="tem-g-now" style="display:none"></div>
@@ -97,7 +106,7 @@
               </div>
 
               <div class="tem-section">
-                <h4>Whitelist (never block)</h4>
+                <h4>Whitelist (never hide / block)</h4>
                 <textarea id="tem-g-whitelist" class="tem-input" rows="3" placeholder="@friend&#10;@org">${Core.escapeHtml(whitelist)}</textarea>
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-ghost" id="tem-g-save-wl" type="button">Save whitelist</button>
@@ -116,9 +125,11 @@
 
             UI.el('tem-g-start').onclick = () => this.startWatch();
             UI.el('tem-g-stop').onclick = () => this.stopWatch();
+            UI.el('tem-g-soft').onchange = () => Core.store.set('geoSoftHide', UI.el('tem-g-soft').checked);
             UI.el('tem-g-dry').onchange = () => Core.store.set('geoDryRun', UI.el('tem-g-dry').checked);
             UI.el('tem-g-bio').onchange = () => Core.store.set('geoUseBio', UI.el('tem-g-bio').checked);
             UI.el('tem-g-autostart').onchange = () => Core.store.set('geoAutoStart', UI.el('tem-g-autostart').checked);
+            UI.el('tem-g-unhide').onclick = () => this.unhideAll();
             UI.el('tem-g-save-needles').onclick = () => {
                 const list = this._parseLines(UI.el('tem-g-needles').value);
                 Core.store.set('geoNeedles', list);
@@ -137,9 +148,11 @@
             UI.el('tem-g-export').onclick = () => this.exportLog();
             UI.el('tem-g-clear').onclick = () => {
                 this.seen.clear();
+                this.matchedHandles.clear();
                 this.logLines = [];
                 this.blockedThisSession = 0;
                 this.matchedThisSession = 0;
+                this.hiddenThisSession = 0;
                 this.scannedThisSession = 0;
                 this.refreshStats();
                 this._paintLog();
@@ -171,9 +184,11 @@
         refreshStats() {
             const s = UI.el('tem-g-scanned');
             const m = UI.el('tem-g-matched');
+            const h = UI.el('tem-g-hidden');
             const b = UI.el('tem-g-blocked');
             if (s) s.textContent = String(this.scannedThisSession);
             if (m) m.textContent = String(this.matchedThisSession);
+            if (h) h.textContent = String(this.hiddenThisSession);
             if (b) b.textContent = String(this.blockedThisSession);
         },
 
@@ -198,17 +213,26 @@
             if (this.watching) return;
             this.watching = true;
             this._setWatchUi(true);
+            const soft = Core.store.get('geoSoftHide', true);
+            const dry = Core.store.get('geoDryRun', true);
             this.setStatus('run', 'Watching timeline…');
-            this.log('Watch started' + (Core.store.get('geoDryRun', true) ? ' (dry-run)' : ' (LIVE BLOCK)'));
+            this.log('Watch started' +
+                (soft ? ' · soft-hide ON' : ' · soft-hide OFF') +
+                (dry ? ' · no live-block' : ' · LIVE BLOCK'));
 
-            // Seed current DOM
             this.scanDom();
 
             this.observer = new MutationObserver(() => {
                 if (!this.watching) return;
-                this.scanDom();
+                this.scheduleScan();
             });
-            this.observer.observe(document.body, { childList: true, subtree: true });
+            try {
+                this.observer.observe(document.body || document.documentElement, {
+                    childList: true, subtree: true
+                });
+            } catch (e) {
+                console.warn('[TEM GeoGuard] observer failed', e);
+            }
             this._pump();
         },
 
@@ -224,6 +248,17 @@
             this.log('Watch stopped');
         },
 
+        scheduleScan() {
+            if (this._scanScheduled) return;
+            this._scanScheduled = true;
+            const run = () => {
+                this._scanScheduled = false;
+                if (this.watching) this.scanDom();
+            };
+            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+            else setTimeout(run, 50);
+        },
+
         _setWatchUi(on) {
             const start = UI.el('tem-g-start');
             const stop = UI.el('tem-g-stop');
@@ -232,29 +267,84 @@
         },
 
         /**
-         * Extract author handles from visible tweets / UserCells.
+         * Author handle from a tweet article (primary User-Name link).
+         */
+        authorFromArticle(article) {
+            const nameBlock = article.querySelector('[data-testid="User-Name"]');
+            if (!nameBlock) return null;
+            const links = nameBlock.querySelectorAll('a[href^="/"]');
+            for (let i = 0; i < links.length; i++) {
+                const href = links[i].getAttribute('href') || '';
+                const m = href.match(/^\/([A-Za-z0-9_]{1,15})(?:\/|$|\?)/);
+                if (m && !/^(home|explore|search|i|settings|messages|notifications|compose)$/i.test(m[1])) {
+                    return m[1];
+                }
+            }
+            return null;
+        },
+
+        /**
+         * Soft-hide: hide the cell wrapper when possible so virtualized list gaps collapse better.
+         */
+        hideArticle(article, handle, reason) {
+            if (!article || article.getAttribute('data-tem-geo-hidden') === '1') return false;
+            const target = article.closest('[data-testid="cellInnerDiv"]') || article;
+            target.setAttribute('data-tem-geo-hidden', '1');
+            if (handle) target.setAttribute('data-tem-geo-handle', handle);
+            if (reason) target.setAttribute('data-tem-geo-reason', reason);
+            target.style.setProperty('display', 'none', 'important');
+            this.hiddenThisSession++;
+            return true;
+        },
+
+        hideArticlesForHandle(handle, reason) {
+            if (!Core.store.get('geoSoftHide', true)) return 0;
+            const key = String(handle || '').toLowerCase();
+            let n = 0;
+            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            for (let i = 0; i < articles.length; i++) {
+                const a = articles[i];
+                const h = this.authorFromArticle(a);
+                if (!h || h.toLowerCase() !== key) continue;
+                if (this.hideArticle(a, h, reason)) n++;
+            }
+            if (n) this.refreshStats();
+            return n;
+        },
+
+        unhideAll() {
+            const nodes = document.querySelectorAll('[data-tem-geo-hidden="1"]');
+            for (let i = 0; i < nodes.length; i++) {
+                const el = nodes[i];
+                el.removeAttribute('data-tem-geo-hidden');
+                el.removeAttribute('data-tem-geo-handle');
+                el.removeAttribute('data-tem-geo-reason');
+                el.style.removeProperty('display');
+            }
+            this.log('Unhid ' + nodes.length + ' soft-hidden node(s)');
+            this.setNow('Unhid ' + nodes.length + ' post(s). Matched handles stay cached until Clear session.');
+        },
+
+        /**
+         * Extract author handles from visible tweets / UserCells; re-apply soft hides.
          */
         scanDom() {
             const handles = new Set();
+            const soft = Core.store.get('geoSoftHide', true);
 
-            // Tweet articles
-            document.querySelectorAll('article[data-testid="tweet"]').forEach(article => {
-                // Primary author link in User-Name
-                const nameBlock = article.querySelector('[data-testid="User-Name"]');
-                if (nameBlock) {
-                    const links = nameBlock.querySelectorAll('a[href^="/"]');
-                    for (const a of links) {
-                        const href = a.getAttribute('href') || '';
-                        const m = href.match(/^\/([A-Za-z0-9_]{1,15})(?:\/|$|\?)/);
-                        if (m && !/^(home|explore|search|i|settings|messages|notifications|compose)$/i.test(m[1])) {
-                            handles.add(m[1]);
-                            break;
-                        }
-                    }
+            const articles = document.querySelectorAll('article[data-testid="tweet"]');
+            for (let i = 0; i < articles.length; i++) {
+                const article = articles[i];
+                const h = this.authorFromArticle(article);
+                if (!h) continue;
+                const key = h.toLowerCase();
+                if (soft && this.matchedHandles.has(key)) {
+                    this.hideArticle(article, h, 'cached match');
                 }
-            });
+                handles.add(h);
+            }
 
-            // Who-to-follow / sidebar cells (optional coverage)
+            // Who-to-follow / sidebar cells
             document.querySelectorAll('[data-testid="UserCell"]').forEach(cell => {
                 const h = Follow.getUsername(cell);
                 if (h && h !== 'unknown') handles.add(h);
@@ -267,6 +357,7 @@
                 this.seen.add(key);
                 this.queue.push(h);
             }
+            this.refreshStats();
         },
 
         async _pump() {
@@ -338,12 +429,22 @@
             }
 
             this.matchedThisSession++;
+            this.matchedHandles.add(key);
             this.refreshStats();
             this.log('MATCH', { handle, reason, location: profile.location });
 
+            // Soft hide: client-side only (works even when live-block is disabled)
+            if (Core.store.get('geoSoftHide', true)) {
+                const n = this.hideArticlesForHandle(handle, reason);
+                this.setNow('Soft-hid @' + handle + (n ? ' (' + n + ' post(s))' : '') + ' — ' + reason);
+                this.log('SOFT-HIDE', { handle, reason, posts: n });
+            }
+
             const dry = Core.store.get('geoDryRun', true);
             if (dry) {
-                this.setNow('DRY-RUN match @' + handle + ' — ' + reason);
+                if (!Core.store.get('geoSoftHide', true)) {
+                    this.setNow('Match @' + handle + ' (no hide, no block) — ' + reason);
+                }
                 return;
             }
 
@@ -353,7 +454,6 @@
                 this.blockedThisSession++;
                 this.refreshStats();
                 this.log('BLOCKED', { handle, reason, location: profile.location });
-                // Persist block history
                 const hist = Core.store.get('geoBlockHistory', []);
                 hist.push({ at: new Date().toISOString(), handle, reason, location: profile.location });
                 Core.store.set('geoBlockHistory', hist.slice(-1000));
@@ -367,7 +467,9 @@
                 at: new Date().toISOString(),
                 scanned: this.scannedThisSession,
                 matched: this.matchedThisSession,
+                hidden: this.hiddenThisSession,
                 blocked: this.blockedThisSession,
+                matchedHandles: [...this.matchedHandles],
                 lines: this.logLines,
                 history: Core.store.get('geoBlockHistory', [])
             };

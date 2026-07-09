@@ -26,17 +26,25 @@
               <nav class="tem-tabs" id="tem-tabs">
                 <button class="tem-tab tem-active" data-tab="followers" type="button">Followers</button>
                 <button class="tem-tab" data-tab="geoguard" type="button">Geo Guard</button>
+                <button class="tem-tab" data-tab="notifs" type="button">Notifs</button>
                 <button class="tem-tab" data-tab="about" type="button">About</button>
               </nav>
               <div class="tem-body">
                 <section class="tem-pane tem-active" id="tem-pane-followers"></section>
                 <section class="tem-pane" id="tem-pane-geoguard"></section>
+                <section class="tem-pane" id="tem-pane-notifs"></section>
                 <section class="tem-pane" id="tem-pane-about"></section>
               </div>`;
-            document.body.insertBefore(panel, document.body.firstChild);
+            const mount = document.body || document.documentElement;
+            mount.insertBefore(panel, mount.firstChild);
 
             document.getElementById('tem-min').onclick = () => panel.classList.toggle('tem-min');
-            document.getElementById('tem-close').onclick = () => { panel.remove(); window.__temRunning = false; GeoGuard?.stopWatch?.(); };
+            document.getElementById('tem-close').onclick = () => {
+                panel.remove();
+                window.__temRunning = false;
+                if (typeof GeoGuard !== 'undefined' && GeoGuard.stopWatch) GeoGuard.stopWatch();
+                if (typeof NotifMute !== 'undefined' && NotifMute.stopWatch) NotifMute.stopWatch();
+            };
             document.getElementById('tem-tabs').addEventListener('click', (e) => {
                 const tab = e.target.closest('.tem-tab');
                 if (tab) this.switchTab(tab.dataset.tab);
@@ -52,6 +60,7 @@
                 p.classList.toggle('tem-active', p.id === `tem-pane-${name}`));
             if (name === 'followers' && typeof Followers !== 'undefined') Followers.onShow();
             if (name === 'geoguard' && typeof GeoGuard !== 'undefined') GeoGuard.onShow();
+            if (name === 'notifs' && typeof NotifMute !== 'undefined') NotifMute.onShow();
         },
 
         makeDraggable(panel, header) {
@@ -106,7 +115,8 @@
             ${p} .tem-iconbtn:hover{background:rgba(255,255,255,.1);color:var(--text)}
             ${p} #tem-close:hover{background:rgba(244,33,46,.15);color:var(--danger)}
             ${p} .tem-tabs{display:flex;gap:2px;padding:8px 10px 0;flex:0 0 auto}
-            ${p} .tem-tab{flex:1;padding:9px 6px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;border-radius:8px 8px 0 0;transition:.15s}
+            ${p} .tem-tab{flex:1;padding:9px 4px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;border-radius:8px 8px 0 0;transition:.15s}
+            [data-tem-geo-hidden="1"],[data-tem-like-hidden="1"]{display:none!important}
             ${p} .tem-tab:hover{color:var(--text);background:rgba(255,255,255,.05)}
             ${p} .tem-tab.tem-active{color:var(--acc);border-bottom-color:var(--acc)}
             ${p} .tem-body{padding:16px;overflow-y:auto;flex:1 1 auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent}

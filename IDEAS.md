@@ -93,14 +93,16 @@ Flag accounts with no posts in N days (from profile or following sort enrichment
 
 ---
 
-## 9. Soft region / language feed filter (hide, not block)
+## 9. Soft region / language feed filter (hide, not block) — **shipped in v1.1**
 
-Hide timeline posts matching language scripts or location needles **without** blocking.
+Hide timeline posts matching language scripts or location needles **without** blocking. See Geo Guard → Soft hide.
 
 | Pros | Cons |
 |------|------|
 | Reversible; fewer ToS-risk write actions | Same false-positive issues as Geo Guard |
 | Safer default than auto-block | Still a form of demographic filtering |
+
+**Also shipped:** mute “like” notification rows (`NotifMute` module).
 
 ---
 
