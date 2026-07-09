@@ -9,11 +9,13 @@
 
 | Directive | Why |
 |-----------|-----|
-| `@grant none` | No sandbox isolation; no `GM_*` APIs |
-| `@inject-into page` | Page context so `fetch` + cookies match X’s own requests |
+| `@grant none` | No `GM_*` APIs; works as console paste too |
+| `@inject-into content` | **Required on X.com** — CSP blocks `page` injection (“could not inject script”) |
 | `@run-at document-idle` | Wait until DOM is ready enough |
 | `@noframes` | Skip iframes |
 | `@match` x.com / twitter.com | SPA coverage |
+
+Do **not** use `@inject-into page` on X — Violentmonkey fails to inject under X’s CSP.
 
 Same file is valid for **console paste** (metadata lines are comments).
 

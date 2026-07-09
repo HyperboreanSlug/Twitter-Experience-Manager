@@ -39,7 +39,11 @@ Same visual language as [Tweepcred Manager](https://github.com/HyperboreanSlug/T
 2. **New** → paste contents of `dist/twitter-experience-manager.user.js`, **or** open the [raw user.js URL](https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js) and confirm install.
 3. Visit x.com while logged in — panel loads at `document-idle`.
 
-**Userscript metadata (VM-compatible):** `@grant none`, `@inject-into page`, `@run-at document-idle`, `@noframes`. No `GM_*` APIs — the same file works as a console paste.
+**Userscript metadata (VM-compatible):** `@grant none`, `@inject-into content`, `@run-at document-idle`, `@noframes`.
+
+> **Note:** Do not use `@inject-into page` on X.com. X’s Content-Security-Policy blocks page-context injection and Violentmonkey shows **“could not inject script”**. Content injection still has DOM + same-origin `fetch`/cookies for this script.
+
+No `GM_*` APIs — the same file works as a console paste.
 
 ## Project layout
 

@@ -16,7 +16,7 @@
               </div>
               <div class="tem-section">
                 <h4>Install (Violentmonkey)</h4>
-                <p>Open <code>dist/twitter-experience-manager.user.js</code> in Violentmonkey (or use “Install from URL” with the raw GitHub file). Metadata uses <code>@grant none</code>, <code>@inject-into page</code>, <code>@run-at document-idle</code>, <code>@noframes</code> — same bundle works as a console paste.</p>
+                <p>Open <code>dist/twitter-experience-manager.user.js</code> in Violentmonkey (or Install from URL with the raw GitHub file). Uses <code>@grant none</code>, <code>@inject-into content</code> (page injection fails on X CSP), <code>@run-at document-idle</code>, <code>@noframes</code>.</p>
               </div>
               <div class="tem-section">
                 <h4>Modular source</h4>

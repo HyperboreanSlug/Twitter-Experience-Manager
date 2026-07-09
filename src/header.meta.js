@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Experience Manager
 // @namespace    https://github.com/HyperboreanSlug/Twitter-Experience-Manager
-// @version      1.1.0
+// @version      1.1.1
 // @description  X usability toolkit: follower tracker, soft region hide, optional geo block, mute like-notifications. Console paste or userscript.
 // @author       HyperboreanSlug
 // @license      MIT
@@ -15,24 +15,24 @@
 // @match        https://mobile.twitter.com/*
 // @icon         https://www.google.com/s2/favicons?domain=twitter.com
 // @grant        none
-// @inject-into  page
+// @inject-into  content
 // @run-at       document-idle
 // @noframes
-// @compatible   violentmonkey
-// @compatible   tampermonkey
-// @compatible   greasemonkey
 // ==/UserScript==
 
 /*
  * Twitter Experience Manager
  * ==========================
- * Dual-mode: console paste + persistent userscript (Violentmonkey / Tampermonkey /
- * Greasemonkey). @grant none + @inject-into page so fetch/cookies match the page.
+ * Dual-mode: console paste + Violentmonkey / Tampermonkey / Greasemonkey.
+ *
+ * Injection: @inject-into content (NOT page). X.com's CSP blocks page-context
+ * injection and Violentmonkey reports "could not inject script" if @inject-into
+ * page is used. Content context still has full DOM + same-origin fetch/cookies
+ * with @grant none.
  *
  *   • Followers  – snapshot followers; sort Following by following-count
  *   • Geo Guard  – soft-hide (and optionally block) timeline posts by region needles
- *   • Notifs     – hide “liked your post” style notification rows
+ *   • Notifs     – hide "liked your post" style notification rows
  *
- * ⚠ Automating X is against its Terms of Service. Region matching uses
- *   self-reported profile text only. Prefer soft-hide over live block.
+ * Automating X is against its Terms of Service. Prefer soft-hide over live block.
  */
