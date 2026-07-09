@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+*.zip
+tweet-headers.js
+tweets.js
+like.js
+direct-message*.js
