@@ -42,9 +42,6 @@
             document.getElementById('tem-close').onclick = () => {
                 panel.remove();
                 try { window.__temRunning = false; } catch (_) { }
-                try {
-                    if (typeof unsafeWindow !== 'undefined' && unsafeWindow) unsafeWindow.__temRunning = false;
-                } catch (_) { }
                 if (typeof GeoGuard !== 'undefined' && GeoGuard.stopWatch) GeoGuard.stopWatch();
                 if (typeof NotifMute !== 'undefined' && NotifMute.stopWatch) NotifMute.stopWatch();
             };

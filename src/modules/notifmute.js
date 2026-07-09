@@ -30,9 +30,8 @@
             // Non-English fragments (optional coverage)
             'gefällt dein',           // de
             'a aimé votre',          // fr
-            'le gustó tu',           // es
-            'curtiu seu',            // pt
-            'いいねしました'          // ja “liked”
+            'le gusto tu',           // es (ascii)
+            'curtiu seu'             // pt
         ],
 
         onShow() {

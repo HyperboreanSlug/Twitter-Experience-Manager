@@ -33,7 +33,6 @@
             'gujarat', 'rajasthan', 'punjab, india', 'west bengal', 'uttar pradesh', 'bihar',
             'odisha', 'orissa', 'telangana', 'andhra', 'assam', 'jharkhand', 'chhattisgarh',
             'madhya pradesh', 'haryana', 'uttarakhand', 'himachal', 'jammu', 'kashmir',
-            '🇮🇳', 'in 🇮🇳',
             // Broader South Asia
             'pakistan', 'karachi', 'lahore', 'islamabad', 'rawalpindi', 'peshawar', 'multan',
             'bangladesh', 'dhaka', 'chittagong', 'chattogram',

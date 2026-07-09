@@ -5,19 +5,20 @@
 - `boot.js` — init + optional Geo Guard / NotifMute auto-start  
 - `footer.js` — close IIFE  
 
-### Violentmonkey / Tampermonkey
+### Violentmonkey / Tampermonkey on X.com
 
 | Directive | Why |
 |-----------|-----|
-| `@grant none` | No `GM_*` APIs; works as console paste too |
-| `@inject-into content` | **Required on X.com** — CSP blocks `page` injection (“could not inject script”) |
-| `@run-at document-idle` | Wait until DOM is ready enough |
-| `@noframes` | Skip iframes |
-| `@match` x.com / twitter.com | SPA coverage |
+| `@grant GM_info` | Forces userscript sandbox. `@grant none` often injects as **page** and dies on X CSP |
+| `@inject-into content` | CSP-safe content world |
+| `@run-at document-end` | DOM ready |
+| `@match *://x.com/*` etc. | Broad host coverage |
 
-Do **not** use `@inject-into page` on X — Violentmonkey fails to inject under X’s CSP.
+Do **not** use `@inject-into page` or bare `@grant none` on X.
 
-Same file is valid for **console paste** (metadata lines are comments).
+If injection still fails, install `dist/tem-smoke-test.user.js` to isolate VM vs script bugs.
+
+Same file is valid for **console paste** (metadata lines are comments; `GM_info` may be undefined).
 
 ```bash
 node scripts/build.js

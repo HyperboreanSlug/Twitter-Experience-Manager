@@ -3,38 +3,48 @@
  * @see docs/modules/core.md
  */
     const Core = {
-        version: '1.1.1',
+        version: '1.1.2',
         product: 'Twitter Experience Manager',
-        baseUrl: `https://${window.location.hostname}`,
+        baseUrl: 'https://' + (typeof location !== 'undefined' ? location.hostname : 'x.com'),
         authorization: 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
         ct0: null,
         transaction_id: '',
         username: '',
         userId: null,
-        snowflakeEpoch: 1288834974657n,
+        // Twitter snowflake epoch as Number (avoid BigInt for max engine compat)
+        snowflakeEpoch: 1288834974657,
         _queryIds: {},
 
         init() {
-            this.ct0 = this.getCookie('ct0');
-            this.updateTransactionId();
-            this.username = this.getUsernameFromUI();
-            this.userId = this.getUserId();
-            this.installQuerySniffer();
+            try {
+                this.ct0 = this.getCookie('ct0');
+                this.updateTransactionId();
+                this.username = this.getUsernameFromUI();
+                this.userId = this.getUserId();
+                this.installQuerySniffer();
+            } catch (e) {
+                try { console.error('[TEM] Core.init error', e); } catch (_) { }
+            }
         },
 
         installQuerySniffer() {
-            if (window.__temSniffer) return;
-            window.__temSniffer = true;
-            const self = this;
-            const origFetch = window.fetch.bind(window);
-            window.fetch = function (input) {
-                try {
-                    const u = typeof input === 'string' ? input : (input && input.url) || '';
-                    const m = u.match(/\/i\/api\/graphql\/([^/]+)\/([^/?]+)/);
-                    if (m) self._queryIds[m[2]] = m[1];
-                } catch (_) { }
-                return origFetch.apply(null, arguments);
-            };
+            try {
+                if (window.__temSniffer) return;
+                if (typeof window.fetch !== 'function') return;
+                window.__temSniffer = true;
+                const self = this;
+                const origFetch = window.fetch.bind(window);
+                window.fetch = function (input) {
+                    try {
+                        const u = typeof input === 'string' ? input : (input && input.url) || '';
+                        const m = u.match(/\/i\/api\/graphql\/([^/]+)\/([^/?]+)/);
+                        if (m) self._queryIds[m[2]] = m[1];
+                    } catch (_) { }
+                    return origFetch.apply(null, arguments);
+                };
+            } catch (e) {
+                try { console.warn('[TEM] query sniffer not installed', e); } catch (_) { }
+            }
         },
 
         async resolveQueryId(operationName) {
@@ -98,8 +108,18 @@
         },
 
         updateTransactionId() {
-            this.transaction_id = [...crypto.getRandomValues(new Uint8Array(95))]
-                .map((x, i) => (i = x / 255 * 61 | 0, String.fromCharCode(i + (i > 9 ? i > 35 ? 61 : 55 : 48)))).join``;
+            try {
+                const arr = new Uint8Array(95);
+                (window.crypto || crypto).getRandomValues(arr);
+                let s = '';
+                for (let i = 0; i < arr.length; i++) {
+                    let x = (arr[i] / 255 * 61) | 0;
+                    s += String.fromCharCode(x + (x > 9 ? (x > 35 ? 61 : 55) : 48));
+                }
+                this.transaction_id = s;
+            } catch (_) {
+                this.transaction_id = String(Date.now()) + Math.random().toString(36).slice(2);
+            }
         },
 
         apiHeaders(contentType = 'application/json') {
@@ -190,20 +210,22 @@
                     referrer: `${this.baseUrl}/${screen_name}`,
                     referrerPolicy: 'strict-origin-when-cross-origin',
                     method: 'GET', mode: 'cors', credentials: 'include',
-                    signal: AbortSignal.timeout(8000)
+                    signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
+                        ? AbortSignal.timeout(8000) : undefined
                 });
                 if (res.status === 404) delete this._queryIds['UserByScreenName'];
                 if (res.status !== 200) return null;
-                const result = (await res.json())?.data?.user?.result;
-                const lg = result?.legacy;
+                const json = await res.json();
+                const result = json && json.data && json.data.user && json.data.user.result;
+                const lg = result && result.legacy;
                 if (!lg) return null;
                 return {
                     id: result.rest_id || lg.id_str,
                     screenName: lg.screen_name || screen_name,
                     name: lg.name || '',
-                    followers: lg.followers_count ?? null,
-                    following: lg.friends_count ?? null,
-                    statuses: lg.statuses_count ?? null,
+                    followers: lg.followers_count != null ? lg.followers_count : null,
+                    following: lg.friends_count != null ? lg.friends_count : null,
+                    statuses: lg.statuses_count != null ? lg.statuses_count : null,
                     location: lg.location || '',
                     description: lg.description || '',
                     createdAt: lg.created_at || null,
@@ -234,7 +256,8 @@
                     credentials: 'include',
                     referrer: this.baseUrl + '/home',
                     mode: 'cors',
-                    signal: AbortSignal.timeout(10000)
+                    signal: (typeof AbortSignal !== 'undefined' && AbortSignal.timeout)
+                        ? AbortSignal.timeout(10000) : undefined
                 });
                 if (res.status === 429) {
                     console.warn('[TEM] Block rate-limited (429)');

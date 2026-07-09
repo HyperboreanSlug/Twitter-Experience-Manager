@@ -1,10 +1,10 @@
-﻿/**
+/**
  * @module followers
  * @description Follower tracker + following list sorted by following-count.
  * @see docs/modules/followers.md
  */
     /* ===================================================================== *
-     *  FOLLOWERS â€” snapshot tracker + sort following by following-count     *
+     *  FOLLOWERS - snapshot tracker + sort following by following-count     *
      * ===================================================================== */
     const Followers = {
         firstShow: true,
@@ -29,14 +29,14 @@
             const pane = UI.el('tem-pane-followers');
             if (!pane) return;
             pane.innerHTML = `
-              <div class="tem-warn-box">Walks your Following / Followers pages and looks up public profile stats. Stay on the list page while scanning. Respect rate limits â€” enrichment uses UserByScreenName (~1 req/account).</div>
+              <div class="tem-warn-box">Walks your Following / Followers pages and looks up public profile stats. Stay on the list page while scanning. Respect rate limits - enrichment uses UserByScreenName (~1 req/account).</div>
 
               <div class="tem-section">
                 <h4>Follower tracker (snapshots)</h4>
                 <p>Save a snapshot of your <strong>Followers</strong> list, then compare later to see who followed or left. Data stays in this browser (<code>localStorage</code>).</p>
                 <div class="tem-stats" id="tem-f-snap-stats">
-                  <div class="tem-stat"><div class="tem-stat-v" id="tem-f-snap-count">â€“</div><div class="tem-stat-l">Last snapshot</div></div>
-                  <div class="tem-stat"><div class="tem-stat-v" id="tem-f-snap-when">â€“</div><div class="tem-stat-l">Taken</div></div>
+                  <div class="tem-stat"><div class="tem-stat-v" id="tem-f-snap-count">-</div><div class="tem-stat-l">Last snapshot</div></div>
+                  <div class="tem-stat"><div class="tem-stat-v" id="tem-f-snap-when">-</div><div class="tem-stat-l">Taken</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-f-hist-n">0</div><div class="tem-stat-l">History</div></div>
                 </div>
                 <div class="tem-btns">
@@ -47,14 +47,14 @@
               </div>
 
               <div class="tem-section">
-                <h4>Following list â€” sort by following count</h4>
+                <h4>Following list - sort by following count</h4>
                 <p>Scan accounts on your <strong>Following</strong> page, fetch each account's following count, and list them sorted. Does not unfollow anyone.</p>
                 <label class="tem-label" for="tem-f-sort">Sort by</label>
                 <select id="tem-f-sort" class="tem-input">
-                  <option value="following_desc">Following count (high â†’ low)</option>
-                  <option value="following_asc">Following count (low â†’ high)</option>
-                  <option value="followers_desc">Followers count (high â†’ low)</option>
-                  <option value="name">Handle (Aâ€“Z)</option>
+                  <option value="following_desc">Following count (high -> low)</option>
+                  <option value="following_asc">Following count (low -> high)</option>
+                  <option value="followers_desc">Followers count (high -> low)</option>
+                  <option value="name">Handle (A-Z)</option>
                 </select>
                 <label class="tem-label" for="tem-f-max">Max accounts to enrich (0 = all scanned)</label>
                 <input id="tem-f-max" type="number" class="tem-input" min="0" value="${Core.store.get('followersMax', 200)}">
@@ -74,7 +74,7 @@
                 <h4>Sorted results</h4>
                 <div id="tem-f-list" class="tem-f-list"><p class="tem-note">Run a scan to populate this table.</p></div>
               </div>
-              <div class="tem-foot">Follower tracker Â· v${Core.version}</div>`;
+              <div class="tem-foot">Follower tracker | v${Core.version}</div>`;
 
             UI.el('tem-f-sort').value = this.sortMode;
             UI.el('tem-f-sort').onchange = () => {
@@ -114,7 +114,7 @@
             const onFollowers = /\/followers\/?$/.test(path) || /\/verified_followers\/?$/.test(path);
             const onFollowing = /\/following\/?$/.test(path);
             if (!onFollowers && !onFollowing) {
-                this.setNow('Tip: open your profile â†’ Followers (for snapshots) or Following (for sort scan).');
+                this.setNow('Tip: open your profile -> Followers (for snapshots) or Following (for sort scan).');
             }
         },
 
@@ -139,8 +139,8 @@
             const n = UI.el('tem-f-hist-n');
             if (n) n.textContent = String(hist.length);
             if (!last) {
-                if (c) c.textContent = 'â€“';
-                if (w) w.textContent = 'â€“';
+                if (c) c.textContent = '-';
+                if (w) w.textContent = '-';
                 return;
             }
             if (c) c.textContent = String(last.handles?.length || 0);
@@ -148,7 +148,7 @@
                 try {
                     const d = new Date(last.at);
                     w.textContent = d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-                } catch (_) { w.textContent = 'â€“'; }
+                } catch (_) { w.textContent = '-'; }
             }
         },
 
@@ -179,7 +179,7 @@
                     });
                     added++;
                 }
-                this.setNow(`Scanned ${seen.size} unique accountsâ€¦ (scroll ${i + 1}/${maxScrolls})`);
+                this.setNow(`Scanned ${seen.size} unique accounts... (scroll ${i + 1}/${maxScrolls})`);
                 if (added === 0) {
                     stagnant++;
                     if (stagnant >= 3) break;
@@ -205,13 +205,13 @@
             const path = location.pathname.toLowerCase();
             if (!/\/followers\/?$/.test(path) && !/\/verified_followers\/?$/.test(path)) {
                 this.setStatus('pause', 'Open your Followers page first');
-                alert('Go to your profile â†’ Followers, then run Snapshot again.');
+                alert('Go to your profile -> Followers, then run Snapshot again.');
                 return;
             }
             this.running = true;
             this.stopFlag = false;
             this._setBusy(true);
-            this.setStatus('run', 'Snapshotting followersâ€¦');
+            this.setStatus('run', 'Snapshotting followers...');
             try {
                 const accounts = await this.collectListHandles({ maxScrolls: 120 });
                 const handles = accounts.map(a => a.handle.toLowerCase()).sort();
@@ -252,9 +252,9 @@
             const gained = [...b].filter(h => !a.has(h));
             const lost = [...a].filter(h => !b.has(h));
             out.innerHTML = `
-              <strong>Diff</strong> ${Core.escapeHtml(prev.at?.slice(0, 10) || '?')} â†’ ${Core.escapeHtml(curr.at?.slice(0, 10) || '?')}<br>
-              <span style="color:var(--ok)">+${gained.length} new</span> Â·
-              <span style="color:var(--danger)">âˆ’${lost.length} lost</span>
+              <strong>Diff</strong> ${Core.escapeHtml(prev.at?.slice(0, 10) || '?')} -> ${Core.escapeHtml(curr.at?.slice(0, 10) || '?')}<br>
+              <span style="color:var(--ok)">+${gained.length} new</span> |
+              <span style="color:var(--danger)">-${lost.length} lost</span>
               <div style="margin-top:8px;max-height:160px;overflow:auto;font-size:12px">
                 ${gained.length ? '<div><strong>New:</strong> ' + gained.map(h => '@' + Core.escapeHtml(h)).join(', ') + '</div>' : ''}
                 ${lost.length ? '<div style="margin-top:6px"><strong>Lost:</strong> ' + lost.map(h => '@' + Core.escapeHtml(h)).join(', ') + '</div>' : ''}
@@ -272,14 +272,14 @@
             const path = location.pathname.toLowerCase();
             if (!/\/following\/?$/.test(path)) {
                 this.setStatus('pause', 'Open your Following page first');
-                alert('Go to your profile â†’ Following, then run Scan & sort again.');
+                alert('Go to your profile -> Following, then run Scan & sort again.');
                 return;
             }
             this.running = true;
             this.stopFlag = false;
             this.rows = [];
             this._setBusy(true);
-            this.setStatus('run', 'Scanning Following listâ€¦');
+            this.setStatus('run', 'Scanning Following list...');
             try {
                 const accounts = await this.collectListHandles({ maxScrolls: 100 });
                 if (this.stopFlag) {
@@ -288,7 +288,7 @@
                 }
                 const max = parseInt(UI.el('tem-f-max')?.value, 10);
                 const toEnrich = (!max || max <= 0) ? accounts : accounts.slice(0, max);
-                this.setStatus('run', `Enriching ${toEnrich.length} profilesâ€¦`);
+                this.setStatus('run', `Enriching ${toEnrich.length} profiles...`);
 
                 for (let i = 0; i < toEnrich.length && !this.stopFlag; i++) {
                     const acc = toEnrich[i];
@@ -324,7 +324,7 @@
                 this.renderTable();
                 const ok = this.rows.filter(r => r.enriched).length;
                 this.setStatus(this.stopFlag ? 'stop' : 'idle',
-                    this.stopFlag ? `Stopped (${ok} enriched)` : `Done â€” ${ok} enriched, ${this.rows.length} total`);
+                    this.stopFlag ? `Stopped (${ok} enriched)` : `Done - ${ok} enriched, ${this.rows.length} total`);
                 this.setNow(`Sorted by: ${this.sortMode}. Export if needed.`);
                 UI.el('tem-f-export').disabled = this.rows.length === 0;
                 UI.el('tem-f-export-json').disabled = this.rows.length === 0;
@@ -372,9 +372,9 @@
                   ${r.mutual ? '<span class="tem-f-tag">mutual</span>' : ''}
                   ${r.private ? '<span class="tem-f-tag">private</span>' : ''}
                 </td>
-                <td class="tem-f-num">${r.following != null ? r.following.toLocaleString() : 'â€”'}</td>
-                <td class="tem-f-num">${r.followers != null ? r.followers.toLocaleString() : 'â€”'}</td>
-                <td class="tem-f-loc">${Core.escapeHtml(r.location || 'â€”')}</td>
+                <td class="tem-f-num">${r.following != null ? r.following.toLocaleString() : '-'}</td>
+                <td class="tem-f-num">${r.followers != null ? r.followers.toLocaleString() : '-'}</td>
+                <td class="tem-f-loc">${Core.escapeHtml(r.location || '-')}</td>
               </tr>`).join('');
 
             host.innerHTML = `
@@ -440,4 +440,3 @@
             if (stop) stop.disabled = !busy;
         }
     };
-

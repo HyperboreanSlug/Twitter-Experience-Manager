@@ -16,7 +16,7 @@
               </div>
               <div class="tem-section">
                 <h4>Install (Violentmonkey)</h4>
-                <p>Open <code>dist/twitter-experience-manager.user.js</code> in Violentmonkey (or Install from URL with the raw GitHub file). Uses <code>@grant none</code>, <code>@inject-into content</code> (page injection fails on X CSP), <code>@run-at document-idle</code>, <code>@noframes</code>.</p>
+                <p>Install via Violentmonkey from the raw <code>.user.js</code> URL. Uses <code>@grant GM_info</code> + <code>@inject-into content</code> (required on X CSP). Delete any old TEM script that used <code>@grant none</code> / <code>@inject-into page</code>.</p>
               </div>
               <div class="tem-section">
                 <h4>Modular source</h4>

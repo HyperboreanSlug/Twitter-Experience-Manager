@@ -39,11 +39,23 @@ Same visual language as [Tweepcred Manager](https://github.com/HyperboreanSlug/T
 2. **New** → paste contents of `dist/twitter-experience-manager.user.js`, **or** open the [raw user.js URL](https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js) and confirm install.
 3. Visit x.com while logged in — panel loads at `document-idle`.
 
-**Userscript metadata (VM-compatible):** `@grant none`, `@inject-into content`, `@run-at document-idle`, `@noframes`.
+**Userscript metadata (VM on X.com):**
 
-> **Note:** Do not use `@inject-into page` on X.com. X’s Content-Security-Policy blocks page-context injection and Violentmonkey shows **“could not inject script”**. Content injection still has DOM + same-origin `fetch`/cookies for this script.
+| Key | Value | Why |
+|-----|--------|-----|
+| `@grant` | `GM_info` | Forces content sandbox (not page). `@grant none` often fails X CSP. |
+| `@inject-into` | `content` | CSP-safe. Never use `page` on x.com. |
+| `@run-at` | `document-end` | Reliable DOM availability |
 
-No `GM_*` APIs — the same file works as a console paste.
+### Still see “Could not inject some scripts”?
+
+1. **Delete** every old TEM copy in Violentmonkey (stale scripts with `@grant none` / `@inject-into page` keep failing).
+2. Install **v1.1.2+** from the raw URL above (or paste `dist/twitter-experience-manager.user.js`).
+3. Optional: install `dist/tem-smoke-test.user.js` first. If smoke fails, the problem is VM/browser permissions, not TEM.
+4. Violentmonkey → Settings → set **Default inject-into** to **content** (or **auto**).
+5. Hard-refresh x.com. Open DevTools console and look for `[TEM] bootstrap start` / `[TEM] ... ready`.
+
+Console paste still works (metadata is comments).
 
 ## Project layout
 
