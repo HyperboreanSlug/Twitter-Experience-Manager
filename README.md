@@ -36,11 +36,11 @@ Same visual language as [Tweepcred Manager](https://github.com/HyperboreanSlug/T
 ### Violentmonkey (recommended) / Tampermonkey / Greasemonkey
 
 1. Install [Violentmonkey](https://violentmonkey.github.io/).
-2. **New** → paste contents of `dist/twitter-experience-manager.user.js`, **or** open the [install URL (jsDelivr)](https://cdn.jsdelivr.net/gh/HyperboreanSlug/Twitter-Experience-Manager@main/dist/twitter-experience-manager.user.js) and confirm install.
+2. **New** → paste contents of `dist/twitter-experience-manager.user.js`, **or** open the [install URL (raw GitHub)](https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js) and confirm install.
 3. Visit x.com while logged in — panel loads at `document-idle`.
 
-**Stuck on an old version (e.g. Tampermonkey shows 1.3.2)?**  
-`raw.githubusercontent.com` is often CDN-cached. Use the jsDelivr link above, or in Tampermonkey: Dashboard → TEM → **Last updated** → check for updates, or **remove the script and reinstall** from jsDelivr. Confirm `@version` is **1.3.4+**.
+**Stuck on an old version (e.g. shows 1.3.5)?**  
+jsDelivr’s `@main` path for `dist/` can freeze for days even after GitHub has newer builds. Do **not** reinstall from jsDelivr. Instead: Dashboard → **remove** TEM → reinstall from the [raw GitHub install URL](https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js). Confirm `@version` is **1.3.9+**. After that, Check for updates uses raw GitHub.
 
 **Userscript metadata (VM on X.com):**
 
