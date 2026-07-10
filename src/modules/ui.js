@@ -220,6 +220,13 @@
             ${p} .tem-check + .tem-check{margin-top:0}
             ${p} .tem-check input{flex:0 0 auto;width:16px;height:16px;margin:2px 0 0;padding:0;accent-color:var(--acc);cursor:pointer}
             ${p} .tem-check strong{color:var(--text);font-weight:700}
+            ${p} .tem-tier-label{margin:14px 0 8px;padding:6px 10px;border-radius:8px;font-size:11px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--acc);background:rgba(29,155,240,.1);border:1px solid rgba(29,155,240,.22)}
+            ${p} .tem-tier-label:first-child{margin-top:4px}
+            ${p} .tem-region-cat{margin:0 0 10px;padding:10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:rgba(0,0,0,.15)}
+            ${p} .tem-region-cat .tem-check-cat{padding-top:0;padding-bottom:6px;border-bottom:1px solid rgba(255,255,255,.06);margin-bottom:4px}
+            ${p} .tem-region-subs{display:grid;grid-template-columns:1fr 1fr;gap:0 8px;padding-left:4px}
+            ${p} .tem-check-sub{font-size:12px;padding:4px 0;align-items:center}
+            ${p} .tem-check-sub input{margin-top:0}
             ${p} .tem-btns{display:flex;flex-wrap:wrap;align-items:stretch;gap:var(--space-2);margin-top:var(--space-3);width:100%}
             ${p} .tem-stats + .tem-btns,${p} .tem-check + .tem-btns,${p} .tem-input + .tem-btns,${p} select.tem-input + .tem-btns,${p} p + .tem-btns,${p} .tem-note + .tem-btns{margin-top:var(--space-3)}
             ${p} .tem-btns + .tem-btns{margin-top:var(--space-2)}
