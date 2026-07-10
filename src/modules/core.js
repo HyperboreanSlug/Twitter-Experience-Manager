@@ -3,7 +3,7 @@
  * @see docs/modules/core.md
  */
     const Core = {
-        version: '1.3.0',
+        version: '1.3.1',
         product: 'Twitter Experience Manager',
         baseUrl: 'https://' + (typeof location !== 'undefined' ? location.hostname : 'x.com'),
         // Public X web client guest token (same string shipped in x.com frontend JS).
@@ -265,9 +265,16 @@
                 if (res.status === 404) delete this._queryIds['UserByScreenName'];
                 if (res.status !== 200) return null;
                 const json = await res.json();
-                const result = json && json.data && json.data.user && json.data.user.result;
+                let result = json && json.data && json.data.user && json.data.user.result;
+                // Unwrap UserUnavailable / TypeName wrappers when present
+                if (result && result.tweet_results) result = null;
+                if (result && result.legacy == null && result.result) result = result.result;
                 const lg = result && result.legacy;
                 if (!lg) return null;
+                // Location: legacy.location is standard; also try profile-level fields
+                const location = (lg.location != null && lg.location !== '')
+                    ? lg.location
+                    : (result.location || result.profile_location || '');
                 return {
                     id: result.rest_id || lg.id_str,
                     screenName: lg.screen_name || screen_name,
@@ -275,7 +282,7 @@
                     followers: lg.followers_count != null ? lg.followers_count : null,
                     following: lg.friends_count != null ? lg.friends_count : null,
                     statuses: lg.statuses_count != null ? lg.statuses_count : null,
-                    location: lg.location || '',
+                    location: String(location || ''),
                     description: lg.description || '',
                     createdAt: lg.created_at || null,
                     verified: !!lg.verified,

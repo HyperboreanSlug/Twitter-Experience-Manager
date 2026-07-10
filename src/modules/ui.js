@@ -5,6 +5,7 @@
     const UI = {
         id: 'tem-panel',
         open: false,
+        _dragMoved: false,
 
         build() {
             const old = document.getElementById(this.id);
@@ -13,6 +14,7 @@
             if (oldTrigger) oldTrigger.remove();
 
             this.open = false;
+            this._dragMoved = false;
 
             const panel = document.createElement('div');
             panel.id = this.id;
@@ -20,7 +22,8 @@
             panel.setAttribute('role', 'region');
             panel.setAttribute('aria-label', 'Twitter Experience Manager');
             panel.innerHTML = this.styles() + `
-              <button type="button" class="tem-dropbtn" id="tem-toggle" aria-expanded="false" aria-controls="tem-dropdown">
+              <button type="button" class="tem-dropbtn" id="tem-toggle" aria-expanded="false" aria-controls="tem-dropdown" title="Open settings · drag to move">
+                <span class="tem-dropbtn-grip" aria-hidden="true" title="Drag">⋮⋮</span>
                 <span class="tem-dropbtn-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg>
                 </span>
@@ -33,7 +36,7 @@
                 <div class="tem-header" id="tem-header">
                   <div class="tem-htext">
                     <h2>Settings</h2>
-                    <div class="tem-sub">Twitter Experience Manager</div>
+                    <div class="tem-sub">Drag header or button to reposition</div>
                   </div>
                   <button class="tem-iconbtn" id="tem-min" title="Minimize" type="button" aria-label="Minimize">
                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14"/></svg>
@@ -61,6 +64,7 @@
 
             const toggle = document.getElementById('tem-toggle');
             const dropdown = document.getElementById('tem-dropdown');
+            const header = document.getElementById('tem-header');
 
             const setOpen = (next) => {
                 this.open = !!next;
@@ -79,11 +83,17 @@
 
             this.setOpen = setOpen;
             this.toggleOpen = () => setOpen(!this.open);
+            this.panelEl = panel;
 
-            toggle.onclick = (e) => {
+            // Click toggles only if the pointer did not drag
+            toggle.addEventListener('click', (e) => {
                 e.stopPropagation();
+                if (this._dragMoved) {
+                    this._dragMoved = false;
+                    return;
+                }
                 this.toggleOpen();
-            };
+            });
 
             document.getElementById('tem-min').onclick = (e) => {
                 e.stopPropagation();
@@ -100,19 +110,111 @@
                 if (tab) this.switchTab(tab.dataset.tab);
             });
 
-            // Click outside closes dropdown
+            // Click outside closes dropdown (ignore while dragging)
             document.addEventListener('pointerdown', (e) => {
-                if (!this.open) return;
+                if (!this.open || this._dragging) return;
                 if (panel.contains(e.target)) return;
                 setOpen(false);
             }, true);
 
-            // Escape collapses
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape' && this.open) setOpen(false);
             });
 
+            this._restorePosition(panel);
+            this.makeDraggable(panel, [toggle, header]);
+
             setOpen(false);
+        },
+
+        _restorePosition(panel) {
+            const pos = Core.store.get('panelPos', null);
+            if (!pos || typeof pos.left !== 'number' || typeof pos.top !== 'number') {
+                // Default: top-right, out of the way
+                panel.style.left = 'auto';
+                panel.style.right = '16px';
+                panel.style.top = '12px';
+                panel.style.transform = 'none';
+                return;
+            }
+            this._applyPosition(panel, pos.left, pos.top);
+        },
+
+        _applyPosition(panel, left, top) {
+            const w = panel.offsetWidth || 200;
+            const h = panel.offsetHeight || 40;
+            const maxL = Math.max(6, window.innerWidth - w - 6);
+            const maxT = Math.max(6, window.innerHeight - Math.min(h, 80) - 6);
+            const l = Math.max(6, Math.min(maxL, left));
+            const t = Math.max(6, Math.min(maxT, top));
+            panel.style.left = l + 'px';
+            panel.style.top = t + 'px';
+            panel.style.right = 'auto';
+            panel.style.transform = 'none';
+            panel.classList.add('tem-positioned');
+            return { left: l, top: t };
+        },
+
+        /**
+         * Drag shell (button + open panel) from toggle and/or header.
+         * Distinguishes click vs drag on the toggle.
+         */
+        makeDraggable(panel, handles) {
+            const self = this;
+            let startX = 0, startY = 0, origL = 0, origT = 0;
+
+            const onDown = (e) => {
+                if (e.button != null && e.button !== 0) return;
+                if (!e.target.closest) return;
+                if (e.target.closest('.tem-iconbtn, .tem-tab, .tem-btn, a, input, textarea, select')) return;
+                if (!e.target.closest('#tem-toggle, #tem-header')) return;
+                self._dragging = true;
+                self._dragMoved = false;
+                const r = panel.getBoundingClientRect();
+                // Convert centered/auto layout to explicit left/top
+                panel.style.left = r.left + 'px';
+                panel.style.top = r.top + 'px';
+                panel.style.right = 'auto';
+                panel.style.transform = 'none';
+                panel.classList.add('tem-positioned');
+                origL = r.left;
+                origT = r.top;
+                startX = e.clientX;
+                startY = e.clientY;
+                try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) { }
+            };
+
+            const onMove = (e) => {
+                if (!self._dragging) return;
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                if (!self._dragMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+                    self._dragMoved = true;
+                    panel.classList.add('tem-dragging');
+                }
+                if (!self._dragMoved) return;
+                self._applyPosition(panel, origL + dx, origT + dy);
+            };
+
+            const onUp = (e) => {
+                if (!self._dragging) return;
+                self._dragging = false;
+                panel.classList.remove('tem-dragging');
+                try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (_) { }
+                if (self._dragMoved) {
+                    const r = panel.getBoundingClientRect();
+                    const pos = self._applyPosition(panel, r.left, r.top);
+                    Core.store.set('panelPos', pos);
+                }
+            };
+
+            (handles || []).forEach((el) => {
+                if (!el) return;
+                el.addEventListener('pointerdown', onDown);
+                el.addEventListener('pointermove', onMove);
+                el.addEventListener('pointerup', onUp);
+                el.addEventListener('pointercancel', onUp);
+            });
         },
 
         switchTab(name) {
@@ -135,26 +237,31 @@
               --space-1:6px;--space-2:8px;--space-3:10px;--space-4:12px;--space-5:14px;--space-6:16px;
               --radius-sm:10px;--radius-md:12px;--radius-lg:14px;--radius-pill:999px;
               --btn-h:40px;--control-h:40px;
-              position:fixed;top:10px;left:50%;transform:translateX(-50%);
+              position:fixed;top:12px;right:16px;left:auto;transform:none;
               z-index:2147483647;margin:0;padding:0;
-              display:flex;flex-direction:column;align-items:center;
+              display:flex;flex-direction:column;align-items:stretch;
               width:auto;max-width:min(440px,calc(100vw - 20px));
               font-family:"TwitterChirp",-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
               font-size:15px;line-height:1.45;text-align:left;color:var(--text);
               -webkit-font-smoothing:antialiased;
               pointer-events:none;
             }
+            ${p}.tem-positioned{right:auto}
+            ${p}.tem-dragging{opacity:.92;cursor:grabbing}
+            ${p}.tem-dragging .tem-dropbtn{cursor:grabbing}
             ${p} > *{pointer-events:auto}
             ${p} .tem-dropbtn{
               display:inline-flex;align-items:center;justify-content:center;gap:8px;
-              min-height:36px;padding:8px 14px 8px 12px;margin:0;
+              min-height:36px;padding:8px 14px 8px 10px;margin:0;
               border:1px solid var(--border);border-radius:var(--radius-pill);
               background:rgba(21,24,28,.92);backdrop-filter:blur(12px) saturate(150%);
               -webkit-backdrop-filter:blur(12px) saturate(150%);
-              color:var(--text);font:700 13px/1.2 inherit;cursor:pointer;
+              color:var(--text);font:700 13px/1.2 inherit;cursor:grab;
               box-shadow:0 8px 28px rgba(0,0,0,.4);
               transition:background .15s,border-color .15s,box-shadow .15s;
+              touch-action:none;user-select:none;
             }
+            ${p} .tem-dropbtn-grip{color:var(--muted);font-size:11px;letter-spacing:-2px;line-height:1;opacity:.85;cursor:grab}
             ${p} .tem-dropbtn:hover{background:rgba(32,36,42,.96);border-color:rgba(255,255,255,.2)}
             ${p} .tem-dropbtn:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
             ${p} .tem-dropbtn-icon{
@@ -182,7 +289,8 @@
             ${p} .tem-dropdown[hidden]{display:none!important}
             @keyframes tem-drop-in{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
 
-            ${p} .tem-header{display:flex;align-items:center;gap:var(--space-3);padding:12px 14px;user-select:none;border-bottom:1px solid var(--border);flex:0 0 auto}
+            ${p} .tem-header{display:flex;align-items:center;gap:var(--space-3);padding:12px 14px;user-select:none;border-bottom:1px solid var(--border);flex:0 0 auto;cursor:grab;touch-action:none}
+            ${p} .tem-header:active{cursor:grabbing}
             ${p} .tem-htext{flex:1 1 auto;min-width:0}
             ${p} .tem-htext h2{margin:0;font-size:15px;font-weight:800;letter-spacing:-.2px;line-height:1.25}
             ${p} .tem-sub{font-size:12px;color:var(--muted);font-weight:500;line-height:1.3;margin-top:2px}
@@ -268,12 +376,13 @@
             ${p} .tem-log{max-height:180px;overflow:auto;font-size:11px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:rgba(0,0,0,.25);border-radius:var(--radius-sm);padding:var(--space-2) var(--space-3);margin-top:var(--space-2)}
             ${p} .tem-log div{padding:3px 0;border-bottom:1px solid rgba(255,255,255,.04);line-height:1.35}
             @media (max-width:480px){
-              ${p}{top:8px;left:10px;right:10px;transform:none;width:auto;max-width:none;align-items:stretch}
+              ${p}:not(.tem-positioned){top:8px;left:10px;right:10px;width:auto;max-width:none}
               ${p} .tem-dropbtn{width:100%;justify-content:center}
-              ${p} .tem-dropdown{width:100%}
+              ${p} .tem-dropdown{width:100%;max-width:100%}
               ${p} .tem-btns > .tem-btn{flex:1 1 100%}
               ${p} .tem-stats-4{grid-template-columns:repeat(2,minmax(0,1fr))}
               ${p} .tem-tab{font-size:11px;padding:8px 2px}
+              ${p} .tem-region-subs{grid-template-columns:1fr}
             }
             </style>`;
         },

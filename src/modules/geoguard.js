@@ -406,11 +406,19 @@
                             master.indeterminate = n > 0 && n < subs.length;
                         }
                     }
+                    // Persist immediately so watching uses current checkboxes
+                    this._persistRegionsFromDom(false);
                     this._paintRegionCount();
                 });
             }
             const customEl = UI.el('tem-g-custom');
-            if (customEl) customEl.addEventListener('input', () => this._paintRegionCount());
+            if (customEl) {
+                customEl.addEventListener('change', () => {
+                    this._persistRegionsFromDom(false);
+                    this._paintRegionCount();
+                });
+                customEl.addEventListener('input', () => this._paintRegionCount());
+            }
             this._paintRegionCount();
             UI.el('tem-g-save-wl').onclick = () => {
                 const list = this._parseLines(UI.el('tem-g-whitelist').value).map(h => h.replace(/^@/, '').toLowerCase());
@@ -520,14 +528,20 @@
 
         startWatch() {
             if (this.watching) return;
+            // Capture current checkbox selection before evaluating
+            this._persistRegionsFromDom(false);
             this.watching = true;
             this._setWatchUi(true);
             const soft = Core.store.get('geoSoftHide', true);
             const dry = Core.store.get('geoDryRun', true);
+            const needles = this._activeNeedleEntries().length;
+            const scripts = [...this._activeScripts()].join(',') || 'none';
             this.setStatus('run', 'Watching timeline…');
             this.log('Watch started' +
                 (soft ? ' · soft-hide ON' : ' · soft-hide OFF') +
-                (dry ? ' · no live-block' : ' · LIVE BLOCK'));
+                (dry ? ' · no live-block' : ' · LIVE BLOCK') +
+                ' · needles=' + needles + ' · scripts=' + scripts);
+            this.setNow('Active: ' + needles + ' location needles (South Africa excluded)');
 
             this.scanDom();
 
@@ -579,15 +593,26 @@
          * Author handle from a tweet article (primary User-Name link).
          */
         authorFromArticle(article) {
+            if (!article) return null;
+            const reserved = /^(home|explore|search|i|settings|messages|notifications|compose|login|signup|tos|privacy)$/i;
+            const tryHref = (href) => {
+                const m = (href || '').match(/^\/([A-Za-z0-9_]{1,15})(?:\/|$|\?)/);
+                if (m && !reserved.test(m[1])) return m[1];
+                return null;
+            };
             const nameBlock = article.querySelector('[data-testid="User-Name"]');
-            if (!nameBlock) return null;
-            const links = nameBlock.querySelectorAll('a[href^="/"]');
-            for (let i = 0; i < links.length; i++) {
-                const href = links[i].getAttribute('href') || '';
-                const m = href.match(/^\/([A-Za-z0-9_]{1,15})(?:\/|$|\?)/);
-                if (m && !/^(home|explore|search|i|settings|messages|notifications|compose)$/i.test(m[1])) {
-                    return m[1];
+            if (nameBlock) {
+                const links = nameBlock.querySelectorAll('a[href^="/"]');
+                for (let i = 0; i < links.length; i++) {
+                    const h = tryHref(links[i].getAttribute('href'));
+                    if (h) return h;
                 }
+            }
+            // Fallback: avatar / profile links in the article
+            const av = article.querySelector('a[href^="/"][role="link"]');
+            if (av) {
+                const h = tryHref(av.getAttribute('href'));
+                if (h) return h;
             }
             return null;
         },
@@ -789,14 +814,21 @@
             return state;
         },
 
-        saveRegionSettings() {
+        _persistRegionsFromDom(logIt) {
+            if (!UI.el('tem-g-regions')) return;
             const state = this._readRegionStateFromDom();
             Core.store.set('geoRegions', state);
             const custom = this._parseLines(UI.el('tem-g-custom') ? UI.el('tem-g-custom').value : '');
             Core.store.set('geoCustomNeedles', custom);
-            const n = this._activeNeedleEntries().length;
-            this.log('Saved regions · ' + n + ' active needles');
-            this.setNow('Regions saved · ' + n + ' needles active');
+            if (logIt) {
+                const n = this._activeNeedleEntries().length;
+                this.log('Saved regions · ' + n + ' active needles');
+                this.setNow('Regions saved · ' + n + ' needles active');
+            }
+        },
+
+        saveRegionSettings() {
+            this._persistRegionsFromDom(true);
             this._paintRegionCount();
         },
 
@@ -982,7 +1014,8 @@
             if (!profile) {
                 const fetched = await Core.fetchUserByScreenName(handle);
                 if (!fetched) {
-                    this.log('Lookup failed', { handle });
+                    this.log('Lookup failed (no profile / queryId)', { handle });
+                    this.setNow('@' + handle + ' — lookup failed');
                     return;
                 }
                 profile = fetched;
@@ -992,16 +1025,20 @@
             this.scannedThisSession++;
             this.refreshStats();
 
+            const locLabel = (profile.location && String(profile.location).trim())
+                ? String(profile.location).trim()
+                : '(empty location)';
             const { match, reason, reasonCode, reasonNeedle } = this.matchRegion(profile);
             if (!match) {
-                this.setNow('@' + handle + ' — no match (' + (profile.location || 'empty loc') + ')');
+                this.setNow('@' + handle + ' · ' + locLabel + ' — no region match');
+                this.log('LOC miss', { handle, location: profile.location || '' });
                 return;
             }
 
             this.matchedThisSession++;
             this.matchedHandles.add(key);
             this.refreshStats();
-            this.log('MATCH', { handle, reason, location: profile.location });
+            this.log('MATCH', { handle, reason, location: profile.location || '' });
             this.dbUpsertMatch({
                 handle: profile.screenName || handle,
                 userId: profile.id || null,
