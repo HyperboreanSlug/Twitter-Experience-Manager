@@ -24,6 +24,16 @@
             'liked posts you were mentioned in',
             'liked a photo you',
             'liked a video you',
+            // “liked 3 of your posts” / “liked 12 of your replies”
+            'of your posts',
+            'of your post',
+            'of your replies',
+            'of your reply',
+            'of your reposts',
+            'of your retweets',
+            'of your quotes',
+            'of your photos',
+            'of your videos',
             // Grouped / alternate copy
             'others liked your',
             'other liked your',
@@ -213,16 +223,40 @@
         },
 
         isLikeNotification(text) {
-            const t = String(text || '').toLowerCase().replace(/\s+/g, ' ');
+            const t = String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
             if (!t) return false;
-            // Prefer like matches; skip pure follow/reply if they don't also say liked
+
+            // Require a like signal so “of your posts” alone (e.g. in other notifs) is safer
+            const hasLikeVerb = /\b(liked|like|likes)\b/.test(t) ||
+                t.indexOf('gefällt') !== -1 ||
+                t.indexOf('aimé') !== -1 ||
+                t.indexOf('gusto') !== -1 ||
+                t.indexOf('curtiu') !== -1;
+
             const patterns = this._patterns();
             for (let i = 0; i < patterns.length; i++) {
-                if (t.indexOf(patterns[i]) !== -1) return true;
+                const p = patterns[i];
+                if (t.indexOf(p) === -1) continue;
+                // Substrings like "of your posts" only count with a like verb nearby
+                if (/^of your /.test(p) && !hasLikeVerb) continue;
+                return true;
             }
-            // Heuristic: “… liked your …” without needing full phrase list
+
+            // “… liked your …”
             if (/\bliked your\b/.test(t)) return true;
-            if (/\bliked a (post|reply|repost|retweet|quote|photo|video)\b/.test(t) && /\byou\b/.test(t)) return true;
+            // “… liked a post/reply/… you …”
+            if (/\bliked a (post|reply|repost|retweet|quote|photo|video)\b/.test(t) && /\byou\b/.test(t)) {
+                return true;
+            }
+            // “liked 3 of your posts”, “liked 12 of your replies”, etc.
+            if (/\bliked\s+\d+\s+of\s+your\b/.test(t)) return true;
+            if (/\bliked\b[\s\S]{0,40}\bof\s+your\s+(posts?|replies?|reposts?|retweets?|quotes?|photos?|videos?)\b/.test(t)) {
+                return true;
+            }
+            // “and 2 others liked … of your …”
+            if (/\bliked\b/.test(t) && /\bof your (posts?|replies?|reposts?|retweets?|quotes?|photos?|videos?)\b/.test(t)) {
+                return true;
+            }
             return false;
         },
 
