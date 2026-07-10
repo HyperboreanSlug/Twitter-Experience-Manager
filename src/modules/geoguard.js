@@ -20,8 +20,7 @@
         profileCache: {},           // handle -> profile + match meta
         delayMs: 1100,
         _scanScheduled: false,
-        // Local match database (localStorage tem:geoDb) — exportable; cap growth
-        dbMaxAccounts: 8000,
+        // Local match database (localStorage tem:geoDb) — exportable, uncapped
         dbSchemaVersion: 1,
 
         // Default South Asia / India location needles (case-insensitive substring).
@@ -69,11 +68,8 @@
             const listUrl = Core.store.get('geoListUrl', '');
             const syncRepo = Core.store.get('geoSyncRepo', '');
             const syncPath = Core.store.get('geoSyncPath', 'data/accounts.json');
+            const syncBranch = Core.store.get('geoSyncBranch', 'main');
             const syncSource = Core.store.get('geoSyncSource', 'tem');
-            const pushMode = Core.store.get('geoPushMode', 'none'); // none | github | put_url
-            const putUrl = Core.store.get('geoPutUrl', '');
-            // Never prefill secrets into the DOM — password fields stay empty; only show "saved" hint
-            const hasWriteSecret = !!this._getWriteSecret();
 
             pane.innerHTML = `
               <div class="tem-warn-box">
@@ -109,10 +105,9 @@
               <div class="tem-section">
                 <h4>Match database</h4>
                 <p>Persistent list of matched accounts in this browser. Export for backup or to merge into <strong>Indian-Account-Tracker</strong>.</p>
-                <div class="tem-stats">
+                <div class="tem-stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-g-db-n">0</div><div class="tem-stat-l">DB accounts</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-g-db-upd">–</div><div class="tem-stat-l">DB updated</div></div>
-                  <div class="tem-stat"><div class="tem-stat-v" id="tem-g-db-cap">${this.dbMaxAccounts}</div><div class="tem-stat-l">Max cap</div></div>
                 </div>
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-primary" id="tem-g-db-export" type="button">Export full DB</button>
@@ -131,39 +126,28 @@
 
               <div class="tem-section">
                 <h4>List host &amp; sync</h4>
-                <p><strong>No credentials are shipped in this script.</strong> Pull from any public HTTPS JSON URL (no login). Write needs a secret <em>you</em> paste — stored only in this browser.</p>
-                <label class="tem-label" for="tem-g-list-url">Public list URL (pull — no account)</label>
-                <input id="tem-g-list-url" class="tem-input" type="url" value="${Core.escapeHtml(listUrl)}" placeholder="https://…/accounts.json  (raw GitHub, Pages, R2, S3, Gist raw, …)">
+                <p>Pull from a public HTTPS JSON URL (no login). Push uses your <strong>GitHub browser session</strong> — log into github.com in this browser; no PAT.</p>
+                <label class="tem-label" for="tem-g-list-url">Public list URL (pull)</label>
+                <input id="tem-g-list-url" class="tem-input" type="url" value="${Core.escapeHtml(listUrl)}" placeholder="https://raw.githubusercontent.com/…/accounts.json">
                 <label class="tem-label" for="tem-g-sync-source">Source tag (this install)</label>
                 <input id="tem-g-sync-source" class="tem-input" type="text" value="${Core.escapeHtml(syncSource)}" placeholder="tem-home">
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-primary" id="tem-g-sync-pull" type="button">Pull &amp; merge</button>
                 </div>
-                <p class="tem-note">Accountless multi-install: pull the same public URL; contribute via <strong>Export public</strong> + file share, or one publisher. See tracker <code>docs/HOSTING.md</code>.</p>
 
-                <h4 class="tem-subhead">Optional write (your credentials only)</h4>
-                <label class="tem-label" for="tem-g-push-mode">Write mode</label>
-                <select id="tem-g-push-mode" class="tem-input">
-                  <option value="none"${pushMode === 'none' ? ' selected' : ''}>None (export files only)</option>
-                  <option value="github"${pushMode === 'github' ? ' selected' : ''}>GitHub Contents API (you supply PAT)</option>
-                  <option value="put_url"${pushMode === 'put_url' ? ' selected' : ''}>HTTP PUT to your URL (you supply auth)</option>
-                </select>
-                <label class="tem-label" for="tem-g-sync-repo">GitHub repo (owner/name) — write mode GitHub only</label>
+                <h4 class="tem-subhead">GitHub push (browser login)</h4>
+                <label class="tem-label" for="tem-g-sync-repo">Repo (owner/name)</label>
                 <input id="tem-g-sync-repo" class="tem-input" type="text" value="${Core.escapeHtml(syncRepo)}" placeholder="yourname/Indian-Account-Tracker">
-                <label class="tem-label" for="tem-g-sync-path">Path in repo</label>
+                <label class="tem-label" for="tem-g-sync-path">File path</label>
                 <input id="tem-g-sync-path" class="tem-input" type="text" value="${Core.escapeHtml(syncPath)}" placeholder="data/accounts.json">
-                <label class="tem-label" for="tem-g-put-url">PUT URL — write mode HTTP PUT only</label>
-                <input id="tem-g-put-url" class="tem-input" type="url" value="${Core.escapeHtml(putUrl)}" placeholder="https://your-bucket/…/accounts.json">
-                <label class="tem-label" for="tem-g-sync-secret">Write secret (PAT or Authorization value) — never committed</label>
-                <input id="tem-g-sync-secret" class="tem-input" type="password" autocomplete="off" spellcheck="false" placeholder="${hasWriteSecret ? '•••• saved in this browser only — paste to replace' : 'Paste your own secret; leave blank to keep/clear'}">
+                <label class="tem-label" for="tem-g-sync-branch">Branch</label>
+                <input id="tem-g-sync-branch" class="tem-input" type="text" value="${Core.escapeHtml(syncBranch)}" placeholder="main">
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-ghost" id="tem-g-sync-save" type="button">Save settings</button>
-                  <button class="tem-btn tem-btn-ghost" id="tem-g-sync-clear-secret" type="button">Clear secret</button>
-                </div>
-                <div class="tem-btns">
                   <button class="tem-btn tem-btn-primary" id="tem-g-sync-push" type="button">Push merge</button>
                 </div>
-                <div class="tem-status idle" id="tem-g-sync-status">Sync idle${hasWriteSecret ? ' · write secret in this browser' : ' · pull needs URL only'}</div>
+                <div class="tem-status idle" id="tem-g-sync-status">Sync idle · push uses GitHub cookies in this browser</div>
+                <p class="tem-note">Requires Violentmonkey/Tampermonkey (<code>GM_xmlhttpRequest</code>) and an active github.com login with write access to the repo.</p>
               </div>
 
               <div class="tem-section">
@@ -240,12 +224,6 @@
             };
 
             UI.el('tem-g-sync-save').onclick = () => this.saveSyncSettings();
-            UI.el('tem-g-sync-clear-secret').onclick = () => {
-                this._setWriteSecret('');
-                const el = UI.el('tem-g-sync-secret');
-                if (el) el.value = '';
-                this.setSyncStatus('idle', 'Write secret cleared from this browser');
-            };
             UI.el('tem-g-sync-pull').onclick = () => this.syncPullMerge();
             UI.el('tem-g-sync-push').onclick = () => this.syncPushMerge();
 
@@ -608,18 +586,12 @@
         saveDb(db) {
             db.updatedAt = new Date().toISOString();
             db.schemaVersion = this.dbSchemaVersion;
-            // Cap: drop oldest by lastSeen if over max
-            const keys = Object.keys(db.accounts);
-            if (keys.length > this.dbMaxAccounts) {
-                keys.sort((a, b) => {
-                    const aa = db.accounts[a].lastSeen || db.accounts[a].firstSeen || '';
-                    const bb = db.accounts[b].lastSeen || db.accounts[b].firstSeen || '';
-                    return aa.localeCompare(bb);
-                });
-                const drop = keys.length - this.dbMaxAccounts;
-                for (let i = 0; i < drop; i++) delete db.accounts[keys[i]];
+            try {
+                Core.store.set('geoDb', db);
+            } catch (e) {
+                console.warn('[TEM GeoGuard] geoDb save failed (storage full?)', e);
+                this.log('DB save failed — localStorage may be full');
             }
-            Core.store.set('geoDb', db);
             this.refreshDbStats();
             return db;
         },
@@ -831,71 +803,33 @@
             }
         },
 
-        // ---- List host sync (NO hardcoded credentials) -----------------------
-        // Pull: public HTTPS JSON URL (anonymous). Write: user-supplied secret only.
-
-        _writeSecretKey: 'geoWriteSecret',
-        _legacyTokenKey: 'geoSyncToken',
-
-        _getWriteSecret() {
-            try {
-                let t = Core.store.get(this._writeSecretKey, '');
-                if (!t) {
-                    t = Core.store.get(this._legacyTokenKey, '');
-                    if (t) {
-                        Core.store.set(this._writeSecretKey, t);
-                        try { localStorage.removeItem('tem:' + this._legacyTokenKey); } catch (_) { }
-                    }
-                }
-                return t ? String(t) : '';
-            } catch (_) { return ''; }
-        },
-
-        _setWriteSecret(secret) {
-            const t = String(secret || '').trim();
-            if (!t) {
-                try { localStorage.removeItem('tem:' + this._writeSecretKey); } catch (_) { }
-                try { localStorage.removeItem('tem:' + this._legacyTokenKey); } catch (_) { }
-                Core.store.set(this._writeSecretKey, '');
-                return;
-            }
-            Core.store.set(this._writeSecretKey, t);
-        },
+        // ---- List host sync (no hardcoded secrets; GitHub push = browser session) ----
 
         saveSyncSettings() {
             const listUrl = (UI.el('tem-g-list-url') && UI.el('tem-g-list-url').value || '').trim();
             const repo = (UI.el('tem-g-sync-repo') && UI.el('tem-g-sync-repo').value || '').trim();
             const path = (UI.el('tem-g-sync-path') && UI.el('tem-g-sync-path').value || '').trim();
+            const branch = (UI.el('tem-g-sync-branch') && UI.el('tem-g-sync-branch').value || 'main').trim();
             const source = (UI.el('tem-g-sync-source') && UI.el('tem-g-sync-source').value || 'tem').trim();
-            const pushMode = (UI.el('tem-g-push-mode') && UI.el('tem-g-push-mode').value) || 'none';
-            const putUrl = (UI.el('tem-g-put-url') && UI.el('tem-g-put-url').value || '').trim();
 
             if (listUrl && !/^https:\/\//i.test(listUrl)) {
                 this.setSyncStatus('stop', 'List URL must be https://');
-                return;
-            }
-            if (putUrl && !/^https:\/\//i.test(putUrl)) {
-                this.setSyncStatus('stop', 'PUT URL must be https://');
                 return;
             }
 
             Core.store.set('geoListUrl', listUrl);
             Core.store.set('geoSyncRepo', repo);
             Core.store.set('geoSyncPath', path || 'data/accounts.json');
+            Core.store.set('geoSyncBranch', branch || 'main');
             Core.store.set('geoSyncSource', source || 'tem');
-            Core.store.set('geoPushMode', pushMode);
-            Core.store.set('geoPutUrl', putUrl);
+            // Drop any legacy stored PATs from older versions
+            try { localStorage.removeItem('tem:geoWriteSecret'); } catch (_) { }
+            try { localStorage.removeItem('tem:geoSyncToken'); } catch (_) { }
 
-            const secEl = UI.el('tem-g-sync-secret');
-            if (secEl && secEl.value.trim()) {
-                this._setWriteSecret(secEl.value.trim());
-                secEl.value = '';
-            }
             const bits = [];
-            if (listUrl) bits.push('pull URL set');
-            if (pushMode !== 'none') bits.push('write=' + pushMode);
-            if (this._getWriteSecret()) bits.push('secret in this browser');
-            this.setSyncStatus('idle', 'Saved' + (bits.length ? ' · ' + bits.join(' · ') : ' · export/import only'));
+            if (listUrl) bits.push('pull URL');
+            if (repo) bits.push('repo ' + repo);
+            this.setSyncStatus('idle', 'Saved' + (bits.length ? ' · ' + bits.join(' · ') : ''));
         },
 
         setSyncStatus(kind, text) {
@@ -905,28 +839,78 @@
             el.textContent = text;
         },
 
-        _ghHeaders(token) {
-            return {
-                Accept: 'application/vnd.github+json',
-                Authorization: 'Bearer ' + token,
-                'X-GitHub-Api-Version': '2022-11-28',
-                'Content-Type': 'application/json'
-            };
+        /**
+         * Cross-origin request with browser cookies (GitHub session).
+         * Uses GM_xmlhttpRequest when available (userscript); never embeds secrets.
+         */
+        _gmRequest(opts) {
+            const method = (opts.method || 'GET').toUpperCase();
+            const url = opts.url;
+            const headers = opts.headers || {};
+            const data = opts.data;
+            const gm = (typeof GM_xmlhttpRequest === 'function')
+                ? GM_xmlhttpRequest
+                : (typeof GM !== 'undefined' && GM.xmlHttpRequest ? GM.xmlHttpRequest.bind(GM) : null);
+
+            if (gm) {
+                return new Promise((resolve, reject) => {
+                    gm({
+                        method: method,
+                        url: url,
+                        headers: headers,
+                        data: data,
+                        anonymous: false,
+                        timeout: opts.timeout || 45000,
+                        onload: (res) => {
+                            resolve({
+                                status: res.status,
+                                ok: res.status >= 200 && res.status < 300,
+                                text: res.responseText || '',
+                                finalUrl: res.finalUrl || url
+                            });
+                        },
+                        onerror: () => reject(new Error('Network error requesting ' + url)),
+                        ontimeout: () => reject(new Error('Timeout requesting ' + url))
+                    });
+                });
+            }
+
+            // Console paste fallback (no cookie cross-origin to github.com)
+            return fetch(url, {
+                method: method,
+                headers: headers,
+                body: data,
+                credentials: 'include',
+                mode: 'cors'
+            }).then(async (res) => ({
+                status: res.status,
+                ok: res.ok,
+                text: await res.text(),
+                finalUrl: res.url
+            }));
         },
 
         async _fetchPublicJson(url) {
             if (!url || !/^https:\/\//i.test(url)) {
                 throw new Error('Need an https:// public list URL');
             }
-            const res = await fetch(url, {
-                method: 'GET',
-                mode: 'cors',
-                credentials: 'omit',
-                cache: 'no-cache',
-                headers: { Accept: 'application/json,text/plain,*/*' }
-            });
-            if (!res.ok) throw new Error('GET ' + res.status + ' from list URL');
-            const text = await res.text();
+            let text = '';
+            try {
+                const res = await this._gmRequest({
+                    method: 'GET',
+                    url: url,
+                    headers: { Accept: 'application/json,text/plain,*/*' }
+                });
+                if (!res.ok) throw new Error('GET ' + res.status);
+                text = res.text;
+            } catch (_) {
+                const res = await fetch(url, {
+                    method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-cache',
+                    headers: { Accept: 'application/json,text/plain,*/*' }
+                });
+                if (!res.ok) throw new Error('GET ' + res.status + ' from list URL');
+                text = await res.text();
+            }
             if (/ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}/.test(text)) {
                 throw new Error('Remote JSON looks like it contains a token — refusing to merge');
             }
@@ -935,94 +919,6 @@
             } catch (_) {
                 throw new Error('List URL did not return JSON');
             }
-        },
-
-        async _ghGetContent(repo, path, token) {
-            if (!token) throw new Error('GitHub API needs a PAT you provide');
-            const url = 'https://api.github.com/repos/' + repo + '/contents/' + path.replace(/^\//, '');
-            const res = await fetch(url, {
-                headers: this._ghHeaders(token),
-                method: 'GET',
-                mode: 'cors'
-            });
-            if (res.status === 404) return { exists: false, sha: null, json: null };
-            if (!res.ok) {
-                const t = await res.text().catch(() => '');
-                throw new Error('GitHub GET ' + res.status + ': ' + t.slice(0, 200));
-            }
-            const meta = await res.json();
-            let text = '';
-            if (meta.encoding === 'base64' && meta.content && !meta.truncated) {
-                text = atob(meta.content.replace(/\n/g, ''));
-            } else if (meta.download_url) {
-                let r2 = await fetch(meta.download_url, { mode: 'cors', credentials: 'omit' });
-                if (!r2.ok) {
-                    r2 = await fetch(meta.download_url, {
-                        headers: { Accept: 'application/vnd.github.raw', Authorization: 'Bearer ' + token },
-                        mode: 'cors'
-                    });
-                }
-                if (!r2.ok) throw new Error('GitHub raw download failed ' + r2.status);
-                text = await r2.text();
-            } else {
-                throw new Error('Could not read file content from GitHub');
-            }
-            let json = null;
-            try { json = JSON.parse(text); } catch (_) {
-                throw new Error('Repo file is not valid JSON');
-            }
-            return { exists: true, sha: meta.sha, json: json };
-        },
-
-        async _ghPutContent(repo, path, token, json, sha, message) {
-            if (!token) throw new Error('Push requires a PAT you provide (not shipped in TEM)');
-            const body = JSON.stringify(json, null, 2) + '\n';
-            const bytes = new TextEncoder().encode(body);
-            let bin = '';
-            for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-            const content = btoa(bin);
-            const url = 'https://api.github.com/repos/' + repo + '/contents/' + path.replace(/^\//, '');
-            const payload = {
-                message: message || 'chore: merge public account list',
-                content: content,
-                branch: 'main'
-            };
-            if (sha) payload.sha = sha;
-            const res = await fetch(url, {
-                method: 'PUT',
-                headers: this._ghHeaders(token),
-                body: JSON.stringify(payload),
-                mode: 'cors'
-            });
-            if (!res.ok) {
-                const t = await res.text().catch(() => '');
-                throw new Error('GitHub PUT ' + res.status + ': ' + t.slice(0, 240));
-            }
-            return res.json();
-        },
-
-        async _putJsonToUrl(url, secret, json) {
-            if (!url || !/^https:\/\//i.test(url)) throw new Error('PUT URL must be https://');
-            const body = JSON.stringify(json, null, 2) + '\n';
-            const headers = {
-                'Content-Type': 'application/json',
-                Accept: 'application/json,text/plain,*/*'
-            };
-            if (secret) {
-                headers.Authorization = /^(Bearer|token)\s/i.test(secret) ? secret : ('Bearer ' + secret);
-            }
-            const res = await fetch(url, {
-                method: 'PUT',
-                headers: headers,
-                body: body,
-                mode: 'cors',
-                credentials: 'omit'
-            });
-            if (!res.ok) {
-                const t = await res.text().catch(() => '');
-                throw new Error('PUT ' + res.status + ': ' + t.slice(0, 200));
-            }
-            return true;
         },
 
         _accountsFromTrackerJson(json) {
@@ -1085,10 +981,10 @@
         async syncPullMerge() {
             const listUrl = Core.store.get('geoListUrl', '');
             if (!listUrl) {
-                this.setSyncStatus('stop', 'Set a public list URL (https://…/accounts.json) and Save');
+                this.setSyncStatus('stop', 'Set a public list URL and Save');
                 return;
             }
-            this.setSyncStatus('run', 'Pulling public list (no credentials)…');
+            this.setSyncStatus('run', 'Pulling public list…');
             try {
                 const json = await this._fetchPublicJson(listUrl);
                 const list = this._accountsFromTrackerJson(json);
@@ -1104,68 +1000,136 @@
             }
         },
 
-        async syncPushMerge() {
-            const mode = Core.store.get('geoPushMode', 'none');
-            if (mode === 'none') {
-                this.setSyncStatus('pause', 'Write mode is None — use Export public, or set GitHub / PUT + your secret');
-                return;
+        /**
+         * Commit public list via GitHub web session (cookies), no PAT.
+         * Opens the file edit page, scrapes CSRF, POSTs tree-save.
+         */
+        async _ghSessionCommit(repo, branch, filePath, content, message) {
+            const path = String(filePath || '').replace(/^\/+/, '');
+            const editUrl = 'https://github.com/' + repo + '/edit/' + encodeURIComponent(branch) + '/' + path;
+            const editRes = await this._gmRequest({
+                method: 'GET',
+                url: editUrl,
+                headers: {
+                    Accept: 'text/html',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            });
+
+            const html = editRes.text || '';
+            if (editRes.status === 404) {
+                throw new Error('File or repo not found (create data/accounts.json on GitHub first)');
             }
-            const secret = this._getWriteSecret();
-            if (mode === 'github' && !secret) {
-                this.setSyncStatus('stop', 'Paste your own GitHub PAT, then Save (nothing is pre-filled)');
+            if (/\/login|Sign in to GitHub|password.*session/i.test(editRes.finalUrl + html) &&
+                !/name="authenticity_token"/i.test(html)) {
+                throw new Error('Not logged into GitHub in this browser — open github.com and sign in');
+            }
+            if (!editRes.ok && editRes.status !== 200) {
+                throw new Error('GitHub edit page HTTP ' + editRes.status);
+            }
+
+            const csrf =
+                (html.match(/name="authenticity_token"\s+value="([^"]+)"/i) || [])[1] ||
+                (html.match(/name="authenticity_token"[^>]*value="([^"]+)"/i) || [])[1] ||
+                (html.match(/<meta\s+name="csrf-token"\s+content="([^"]+)"/i) || [])[1];
+            if (!csrf) {
+                throw new Error('Could not read GitHub CSRF — log into github.com, then retry');
+            }
+
+            const parts = path.split('/');
+            const filename = parts.pop() || 'accounts.json';
+            const dir = parts.join('/');
+            const saveUrl = 'https://github.com/' + repo + '/tree-save/' +
+                encodeURIComponent(branch) + (dir ? '/' + dir : '');
+
+            const form = new URLSearchParams();
+            form.set('authenticity_token', csrf);
+            form.set('message', message || ('chore: merge public accounts'));
+            form.set('description', '');
+            form.set('filename', filename);
+            form.set('new_filename', filename);
+            form.set('value', content);
+            form.set('commit', '1');
+            form.set('quick_pull', '0');
+
+            const saveRes = await this._gmRequest({
+                method: 'POST',
+                url: saveUrl,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    Accept: 'text/html,application/xhtml+xml',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    Referer: editUrl
+                },
+                data: form.toString()
+            });
+
+            if (saveRes.status === 302 || saveRes.ok || saveRes.status === 200 || saveRes.status === 201) {
+                return true;
+            }
+            // GitHub sometimes returns 422/400 with HTML error
+            if (/something went wrong|Unprocessable|not found/i.test(saveRes.text || '')) {
+                throw new Error('GitHub rejected the commit (check write access on ' + repo + ')');
+            }
+            if (saveRes.status === 401 || saveRes.status === 403) {
+                throw new Error('GitHub session lacks write access — log in as a collaborator');
+            }
+            // Soft success: redirected away from edit
+            if (saveRes.finalUrl && /\/blob\/|\/commit\//.test(saveRes.finalUrl)) return true;
+            if (saveRes.status >= 200 && saveRes.status < 400) return true;
+            throw new Error('GitHub commit failed HTTP ' + saveRes.status);
+        },
+
+        async syncPushMerge() {
+            const repo = Core.store.get('geoSyncRepo', '');
+            const path = Core.store.get('geoSyncPath', 'data/accounts.json') || 'data/accounts.json';
+            const branch = Core.store.get('geoSyncBranch', 'main') || 'main';
+
+            if (!/^[^/]+\/[^/]+$/.test(repo)) {
+                this.setSyncStatus('stop', 'Set GitHub repo as owner/name and Save');
                 return;
             }
 
-            this.setSyncStatus('run', 'Building merge for push…');
+            const hasGm = typeof GM_xmlhttpRequest === 'function' ||
+                (typeof GM !== 'undefined' && GM.xmlHttpRequest);
+            if (!hasGm) {
+                this.setSyncStatus('stop', 'Install as userscript (Violentmonkey) for GitHub session push');
+                return;
+            }
+
+            this.setSyncStatus('run', 'Merging + pushing via GitHub login…');
             try {
                 let remoteList = [];
-                let sha = null;
-
                 const listUrl = Core.store.get('geoListUrl', '');
                 if (listUrl) {
                     try {
-                        const remoteJson = await this._fetchPublicJson(listUrl);
-                        remoteList = this._accountsFromTrackerJson(remoteJson);
+                        remoteList = this._accountsFromTrackerJson(await this._fetchPublicJson(listUrl));
                     } catch (e1) {
                         this.log('Push: public pull skipped', { err: String(e1 && e1.message || e1) });
                     }
                 }
 
-                if (mode === 'github') {
-                    const repo = Core.store.get('geoSyncRepo', '');
-                    const path = Core.store.get('geoSyncPath', 'data/accounts.json');
-                    if (!/^[^/]+\/[^/]+$/.test(repo)) {
-                        this.setSyncStatus('stop', 'Set GitHub repo as owner/name (your repo)');
-                        return;
+                // Also try raw github content (session-aware) as remote baseline
+                try {
+                    const rawUrl = 'https://raw.githubusercontent.com/' + repo + '/' +
+                        encodeURIComponent(branch) + '/' + path.replace(/^\//, '');
+                    const raw = await this._gmRequest({ method: 'GET', url: rawUrl });
+                    if (raw.ok && raw.text) {
+                        try {
+                            remoteList = this._accountsFromTrackerJson(JSON.parse(raw.text));
+                        } catch (_) { /* ignore */ }
                     }
-                    const remote = await this._ghGetContent(repo, path, secret);
-                    if (remote.exists && remote.json) {
-                        remoteList = this._accountsFromTrackerJson(remote.json);
-                        sha = remote.sha;
-                    }
-                }
+                } catch (_) { /* ignore */ }
 
                 this.dbMergeAccounts(remoteList, { sourceTag: 'remote', publicOnly: true });
                 const localPub = this.serializeDb({ publicOnly: true });
                 const payload = this._unionPublicLists(remoteList, localPub.accounts);
+                const body = JSON.stringify(payload, null, 2) + '\n';
+                const msg = 'chore: merge public accounts (' + payload.count + ')';
 
-                if (mode === 'github') {
-                    const repo = Core.store.get('geoSyncRepo', '');
-                    const path = Core.store.get('geoSyncPath', 'data/accounts.json');
-                    await this._ghPutContent(
-                        repo, path, secret, payload, sha,
-                        'chore: merge public accounts (' + payload.count + ')'
-                    );
-                    this.setSyncStatus('idle', 'Pushed ' + payload.count + ' → GitHub ' + repo);
-                } else if (mode === 'put_url') {
-                    const putUrl = Core.store.get('geoPutUrl', '');
-                    await this._putJsonToUrl(putUrl, secret, payload);
-                    this.setSyncStatus('idle', 'PUT OK · ' + payload.count + ' accounts');
-                } else {
-                    this.setSyncStatus('stop', 'Unknown write mode');
-                    return;
-                }
-                this.log('Sync push OK', { count: payload.count, mode: mode });
+                await this._ghSessionCommit(repo, branch, path, body, msg);
+                this.setSyncStatus('idle', 'Pushed ' + payload.count + ' → ' + repo);
+                this.log('Sync push OK', { count: payload.count, repo: repo, via: 'browser-session' });
             } catch (e) {
                 console.warn('[TEM GeoGuard] sync push', e);
                 this.setSyncStatus('stop', 'Push failed: ' + (e && e.message ? e.message : e));

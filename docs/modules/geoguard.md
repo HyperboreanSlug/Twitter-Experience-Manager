@@ -17,8 +17,7 @@ Matching uses **self-reported** profile location (optional bio) vs region needle
 
 | Key | Notes |
 |-----|--------|
-| `tem:geoDb` | `{ schemaVersion, updatedAt, accounts: { handleLower: record } }` |
-| Cap | 8000 accounts (evict oldest `lastSeen`) |
+| `tem:geoDb` | `{ schemaVersion, updatedAt, accounts }` — **uncapped** |
 
 Record (full/local): handle, userId, reasonCode, reasonNeedle, reason, location, firstSeen, lastSeen, hits, blocked, sources.
 
@@ -28,15 +27,13 @@ Record (full/local): handle, userId, reasonCode, reasonNeedle, reason, location,
 
 | Key | Notes |
 |-----|--------|
-| `tem:geoListUrl` | Public HTTPS JSON URL for **anonymous pull** |
-| `tem:geoPushMode` | `none` \| `github` \| `put_url` (default **none**) |
-| `tem:geoSyncRepo` | Your `owner/repo` if using GitHub write |
+| `tem:geoListUrl` | Public HTTPS JSON for anonymous pull |
+| `tem:geoSyncRepo` | `owner/repo` for browser-session push |
 | `tem:geoSyncPath` | e.g. `data/accounts.json` |
-| `tem:geoPutUrl` | Your HTTPS PUT endpoint |
+| `tem:geoSyncBranch` | default `main` |
 | `tem:geoSyncSource` | Install tag |
-| `tem:geoWriteSecret` | **User-pasted only** — never in source, never exported |
 
-Pull uses `_fetchPublicJson` (no Authorization). Push refuses GitHub mode without a user-supplied secret.
+Pull: public GET. Push: `GM_xmlhttpRequest` + **GitHub browser cookies** (edit form / tree-save) — log into github.com; no PAT.
 
 ## Public API (high level)
 

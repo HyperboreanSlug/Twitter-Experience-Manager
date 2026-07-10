@@ -81,12 +81,12 @@ node scripts/build.js
 
 ### Match database & multi-install tracker
 
-- Every match is written to a local DB (`tem:geoDb`, cap 8000). Export **full** (local backup) or **public** (safe to share).
+- Every match is written to a local DB (`tem:geoDb`, **no size cap**). Export **full** or **public**.
 - **No credentials are hardcoded** in TEM. Sync:
-  1. **Pull** from any public HTTPS `accounts.json` URL (no login), and/or  
-  2. **Export public** → offline merge / publish, and/or  
-  3. **Optional push** only if *you* paste a PAT or PUT auth (browser `localStorage` only).
-- Sibling project **Indian-Account-Tracker** documents accountless hosting: public URL hub, file mesh, optional writer. See its `docs/HOSTING.md` and `docs/PRIVACY.md`.
+  1. **Pull** from any public HTTPS `accounts.json` URL, and/or  
+  2. **Export public** → offline merge, and/or  
+  3. **GitHub push** using your **browser GitHub login** (`GM_xmlhttpRequest` + session cookies — no PAT).
+- Sibling project **Indian-Account-Tracker**: see `docs/HOSTING.md`.
 
 ## Like notification mute
 

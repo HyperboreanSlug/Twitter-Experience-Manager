@@ -186,10 +186,7 @@
                 el.textContent = 'Account: not detected — open x.com while logged in, then Refresh account.';
                 return;
             }
-            const parts = ['Tracking ' + this._accountLabel(acc)];
-            if (acc.userId) parts.push('id ' + acc.userId);
-            parts.push('history isolated per account');
-            el.textContent = parts.join(' · ');
+            el.textContent = 'Tracking ' + this._accountLabel(acc);
         },
 
         /** Profile owner handle from /:user/followers|following|verified_followers */

@@ -1,6 +1,6 @@
 # TEM Master Module Map
 
-**Repo:** HyperboreanSlug/Twitter-Experience-Manager · **v1.2.1** · **MIT**  
+**Repo:** HyperboreanSlug/Twitter-Experience-Manager · **v1.2.3** · **MIT**  
 **What:** Browser userscript / console toolkit for x.com — follower snapshots, Following sort, timeline soft-hide by location text, **geo match DB + tracker sync**, like-notif mute.  
 **Sibling:** [Indian-Account-Tracker](https://github.com/HyperboreanSlug/Indian-Account-Tracker) — shared public handle list (no keys/PII).  
 **Runtime:** Single IIFE, session cookies only, no API keys. Dual: console paste + Violentmonkey (`@grant GM_info` + `@inject-into content`).  
@@ -219,16 +219,14 @@ _pump  → evaluateHandle (delay 1100+rand0-350)
 | `geoUseBio` | false | also scan description |
 | `geoAutoStart` | **false** | boot watcher |
 | `geoBlockHistory` | `[]` | last 1000 block events |
-| `geoDb` | `{ accounts }` | Persistent match DB (cap 8k); full has location |
+| `geoDb` | `{ accounts }` | Persistent match DB (uncapped); full has location |
 | `geoListUrl` | `''` | Public HTTPS JSON for anonymous pull |
-| `geoPushMode` | `none` | `none` \| `github` \| `put_url` |
-| `geoSyncRepo` | `''` | User’s owner/repo if GitHub write |
+| `geoSyncRepo` | `''` | owner/repo for session push |
 | `geoSyncPath` | `data/accounts.json` | |
-| `geoPutUrl` | `''` | User HTTPS PUT endpoint |
+| `geoSyncBranch` | `main` | |
 | `geoSyncSource` | `tem` | Per-install tag |
-| `geoWriteSecret` | — | **User-pasted only; never in source** |
 
-**Credentials policy:** No PATs/keys in repo. Pull = unauthenticated GET. Write only with user secret. X `authorization` bearer in Core is the **public web guest token** (same as x.com frontend), not a user secret and not used for tracker sync.
+**Credentials policy:** No PATs/keys in repo. Pull = public GET. GitHub push = browser session via `GM_xmlhttpRequest`. X `authorization` bearer in Core is the **public web guest token**, not used for tracker sync.
 
 **DOM marks:** `data-tem-geo-hidden=1`, `data-tem-geo-handle`, `data-tem-geo-reason` on `cellInnerDiv` or article.
 
