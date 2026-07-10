@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Twitter Experience Manager
 // @namespace    https://github.com/HyperboreanSlug/Twitter-Experience-Manager
-// @version      1.3.9
+// @version      1.3.10
 // @description  X usability toolkit: follower tracker, geo filters, mute like/retweet notifications.
 // @author       HyperboreanSlug
 // @license      MIT
