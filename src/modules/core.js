@@ -3,9 +3,11 @@
  * @see docs/modules/core.md
  */
     const Core = {
-        version: '1.1.2',
+        version: '1.2.2',
         product: 'Twitter Experience Manager',
         baseUrl: 'https://' + (typeof location !== 'undefined' ? location.hostname : 'x.com'),
+        // Public X web client guest token (same string shipped in x.com frontend JS).
+        // NOT a user password/PAT. Tracker sync never uses this. Prefer session cookies (ct0).
         authorization: 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
         ct0: null,
         transaction_id: '',
@@ -19,12 +21,48 @@
             try {
                 this.ct0 = this.getCookie('ct0');
                 this.updateTransactionId();
-                this.username = this.getUsernameFromUI();
-                this.userId = this.getUserId();
+                this.refreshIdentity();
                 this.installQuerySniffer();
             } catch (e) {
                 try { console.error('[TEM] Core.init error', e); } catch (_) { }
             }
+        },
+
+        /**
+         * Re-read logged-in account from cookies + nav UI.
+         * Prefer stable twid userId; username from account switcher only (not profile page).
+         * @returns {{ userId: string|null, username: string }}
+         */
+        refreshIdentity() {
+            try {
+                this.ct0 = this.getCookie('ct0') || this.ct0;
+            } catch (_) { }
+            const prevId = this.userId;
+            this.userId = this.getUserId();
+            const fromUi = this.getUsernameFromUI();
+            if (fromUi) {
+                this.username = fromUi;
+            } else if (this.userId) {
+                const mapped = this.store.get('accountMap:' + this.userId, null);
+                if (mapped) this.username = String(mapped);
+            }
+            // Drop stale handle if cookie account changed and UI has not painted yet
+            if (this.userId && prevId && this.userId !== prevId && !fromUi) {
+                const mapped = this.store.get('accountMap:' + this.userId, null);
+                this.username = mapped ? String(mapped) : '';
+            }
+            if (this.userId && this.username) {
+                this.store.set('accountMap:' + this.userId, String(this.username).toLowerCase());
+                this.store.set('lastAccount', {
+                    userId: this.userId,
+                    username: String(this.username).toLowerCase(),
+                    at: Date.now()
+                });
+            }
+            return {
+                userId: this.userId,
+                username: (this.username || '').toLowerCase()
+            };
         },
 
         installQuerySniffer() {
@@ -94,17 +132,28 @@
             return m ? m[0] : null;
         },
 
+        /**
+         * Logged-in handle from nav account switcher only.
+         * Avoids [data-testid="UserName"] / URL path (those are profile-under-view, not session).
+         */
         getUsernameFromUI() {
-            const sources = [
-                '[data-testid="SideNav_AccountSwitcher_Button"]',
-                '[data-testid="UserName"]'
-            ];
-            for (const sel of sources) {
-                const el = document.querySelector(sel);
-                const m = el && el.textContent.match(/@(\w+)/);
+            const switcher = document.querySelector('[data-testid="SideNav_AccountSwitcher_Button"]');
+            if (switcher) {
+                const text = (switcher.textContent || '') + ' ' + (switcher.getAttribute('aria-label') || '');
+                const m = text.match(/@([A-Za-z0-9_]{1,15})/);
                 if (m) return m[1];
             }
-            return (document.location.href.split('/')[3] || '').replace('#', '');
+            // Desktop sometimes nests the handle in a link inside the switcher region
+            const nav = document.querySelector('header[role="banner"] a[href^="/"][data-testid="AppTabBar_Profile_Link"]') ||
+                document.querySelector('[data-testid="AppTabBar_Profile_Link"]');
+            if (nav) {
+                const href = nav.getAttribute('href') || '';
+                const hm = href.match(/^\/([A-Za-z0-9_]{1,15})\/?$/);
+                if (hm && !/^(home|explore|search|i|settings|messages|notifications|compose|login)$/i.test(hm[1])) {
+                    return hm[1];
+                }
+            }
+            return '';
         },
 
         updateTransactionId() {

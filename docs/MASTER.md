@@ -1,7 +1,8 @@
 # TEM Master Module Map
 
-**Repo:** HyperboreanSlug/Twitter-Experience-Manager · **v1.1.2** · **MIT**  
-**What:** Browser userscript / console toolkit for x.com — follower snapshots, Following sort, timeline soft-hide by location text, like-notif mute.  
+**Repo:** HyperboreanSlug/Twitter-Experience-Manager · **v1.2.1** · **MIT**  
+**What:** Browser userscript / console toolkit for x.com — follower snapshots, Following sort, timeline soft-hide by location text, **geo match DB + tracker sync**, like-notif mute.  
+**Sibling:** [Indian-Account-Tracker](https://github.com/HyperboreanSlug/Indian-Account-Tracker) — shared public handle list (no keys/PII).  
 **Runtime:** Single IIFE, session cookies only, no API keys. Dual: console paste + Violentmonkey (`@grant GM_info` + `@inject-into content`).  
 **Build:** `node scripts/build.js` → concat → `dist/twitter-experience-manager.user.js` (+ root copy + smoke test).
 
@@ -92,7 +93,9 @@ Globals (concat, not ES modules): `Core`, `Follow`, `UI`, `Followers`, `GeoGuard
 
 | API | Behavior |
 |-----|----------|
-| `init()` | Cookie ct0, random txn id, username from nav UI, userId from `twid`, install fetch sniffer |
+| `init()` | Cookie ct0, random txn id, `refreshIdentity()`, install fetch sniffer |
+| `refreshIdentity()` | Re-read `twid` + account switcher / profile nav link; map `accountMap:<id>` → handle |
+| `getUsernameFromUI()` | **Session only** (switcher / AppTabBar profile link) — not profile `UserName` or URL path |
 | `installQuerySniffer` | Patch `fetch` once (`__temSniffer`); map `/graphql/{id}/{Op}` → `_queryIds[Op]` |
 | `resolveQueryId(op)` | Sniffed id, else scrape twimg client-web JS for queryId |
 | `fetchUserByScreenName(h)` | GraphQL UserByScreenName → normalized profile object or null |
@@ -169,9 +172,14 @@ Globals (concat, not ES modules): `Core`, `Follow`, `UI`, `Followers`, `GeoGuard
 
 | Key | Default | |
 |-----|---------|--|
-| `followersHistory:<user>` | `[]` | Last **20** snaps `{ at, username, handles[], meta[] }` |
-| `followersSort` | `following_desc` | |
+| `followersHistory:id:<userId>` | `[]` | Preferred; last **20** snaps `{ at, username, userId, handles[], meta[] }` |
+| `followersHistory:user:<handle>` | — | Fallback when no twid |
+| `followersHistory:<handle>` | — | Legacy; migrated into id key on read |
+| `accountMap:<userId>` | handle | Last known screen name for id |
+| `followersSort` | `following_desc` | Global UI pref |
 | `followersMax` | `200` | 0 = enrich all scanned |
+
+**Account isolation:** `ensureAccount()` + `assertOwnList()` — refuse snapshot/scan on another profile’s list; reset in-memory rows on account switch.
 
 **Export:** CSV / JSON of sorted rows. **No writes to X** (read + local only).
 
@@ -211,8 +219,20 @@ _pump  → evaluateHandle (delay 1100+rand0-350)
 | `geoUseBio` | false | also scan description |
 | `geoAutoStart` | **false** | boot watcher |
 | `geoBlockHistory` | `[]` | last 1000 block events |
+| `geoDb` | `{ accounts }` | Persistent match DB (cap 8k); full has location |
+| `geoListUrl` | `''` | Public HTTPS JSON for anonymous pull |
+| `geoPushMode` | `none` | `none` \| `github` \| `put_url` |
+| `geoSyncRepo` | `''` | User’s owner/repo if GitHub write |
+| `geoSyncPath` | `data/accounts.json` | |
+| `geoPutUrl` | `''` | User HTTPS PUT endpoint |
+| `geoSyncSource` | `tem` | Per-install tag |
+| `geoWriteSecret` | — | **User-pasted only; never in source** |
+
+**Credentials policy:** No PATs/keys in repo. Pull = unauthenticated GET. Write only with user secret. X `authorization` bearer in Core is the **public web guest token** (same as x.com frontend), not a user secret and not used for tracker sync.
 
 **DOM marks:** `data-tem-geo-hidden=1`, `data-tem-geo-handle`, `data-tem-geo-reason` on `cellInnerDiv` or article.
+
+**Tracker sync:** public fields only. Multi-install = public URL pull + export mesh, or optional user-credential push.
 
 **Match:** case-insensitive needle in location (+ bio if on); else Devanagari `\u0900-\u097F` in **location only**.
 

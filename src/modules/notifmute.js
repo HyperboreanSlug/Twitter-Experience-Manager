@@ -73,8 +73,8 @@
                   <button class="tem-btn tem-btn-ghost" id="tem-n-stop" type="button" disabled>Stop</button>
                 </div>
                 <div class="tem-btns">
-                  <button class="tem-btn tem-btn-ghost" id="tem-n-scan" type="button">Scan once now</button>
-                  <button class="tem-btn tem-btn-ghost" id="tem-n-unhide" type="button">Unhide (this page)</button>
+                  <button class="tem-btn tem-btn-ghost" id="tem-n-scan" type="button">Scan once</button>
+                  <button class="tem-btn tem-btn-ghost" id="tem-n-unhide" type="button">Unhide page</button>
                 </div>
                 <div class="tem-status idle" id="tem-n-status">Idle</div>
                 <p class="tem-note">Tip: open Notifications (All or Verified) then start the watcher. Works best on the All tab.</p>

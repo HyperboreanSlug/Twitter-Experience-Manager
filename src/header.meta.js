@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Twitter Experience Manager
 // @namespace    https://github.com/HyperboreanSlug/Twitter-Experience-Manager
-// @version      1.1.2
-// @description  X usability toolkit: follower tracker, soft region hide, geo filter, mute like-notifications.
+// @version      1.2.2
+// @description  X usability toolkit: follower tracker, geo DB + tracker sync, soft region hide, mute like-notifications.
 // @author       HyperboreanSlug
 // @license      MIT
 // @homepageURL  https://github.com/HyperboreanSlug/Twitter-Experience-Manager

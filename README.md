@@ -18,7 +18,7 @@
 | Tab | What it does |
 | --- | --- |
 | **Followers** | Snapshot your Followers list over time (diff new/lost). Scan **Following** and **sort by each account’s following count**. Export CSV/JSON. |
-| **Geo Guard** | Watch the timeline, look up authors, match location needles (default: **India + South Asia**). **Soft-hide** matching posts by default; optional live-block (off by default). Whitelist supported. |
+| **Geo Guard** | Watch the timeline, look up authors, match location needles (default: **India + South Asia**). **Soft-hide** by default; optional live-block (off). **Persistent match DB** (export JSON/CSV) + optional sync to sibling repo [Indian-Account-Tracker](https://github.com/HyperboreanSlug/Indian-Account-Tracker) (public handles only; PAT stays in browser). |
 | **Notifs** | Hide **“liked your post”** (and similar) notification rows on `/notifications` — client-side only. Auto-starts by default. |
 | **About** | Docs pointer + warnings |
 
@@ -78,6 +78,15 @@ node scripts/build.js
 - **Do not live-block** (default ON): never calls `blocks/create` unless you uncheck it.
 - Profile lookups are delayed (~1.1s+) to reduce rate-limit pressure.
 - False positives: tourists, diaspora, joke locations, shared city names. False negatives: empty location fields.
+
+### Match database & multi-install tracker
+
+- Every match is written to a local DB (`tem:geoDb`, cap 8000). Export **full** (local backup) or **public** (safe to share).
+- **No credentials are hardcoded** in TEM. Sync:
+  1. **Pull** from any public HTTPS `accounts.json` URL (no login), and/or  
+  2. **Export public** → offline merge / publish, and/or  
+  3. **Optional push** only if *you* paste a PAT or PUT auth (browser `localStorage` only).
+- Sibling project **Indian-Account-Tracker** documents accountless hosting: public URL hub, file mesh, optional writer. See its `docs/HOSTING.md` and `docs/PRIVACY.md`.
 
 ## Like notification mute
 

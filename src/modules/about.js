@@ -10,7 +10,7 @@
                 <p>A modular usability toolkit for X.com — same packaging style as Tweepcred Manager (console paste + Greasemonkey), focused on network hygiene and timeline control.</p>
                 <ul>
                   <li><strong>Followers</strong> — snapshot who follows you; sort Following by each account's following count.</li>
-                  <li><strong>Geo Guard</strong> — <strong>soft-hide</strong> (and optionally block) timeline posts by region needles (defaults: India + South Asia).</li>
+                  <li><strong>Geo Guard</strong> — <strong>soft-hide</strong> (and optionally block) by region needles; local match DB + optional sync to Indian-Account-Tracker (public handles only).</li>
                   <li><strong>Notifs</strong> — hide “liked your post” rows on the notifications page (client-side).</li>
                 </ul>
               </div>
