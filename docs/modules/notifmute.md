@@ -1,30 +1,29 @@
 # Module: `notifmute`
 
-**Source:** `src/modules/notifmute.js` · **Exports:** `NotifMute`
+**Source:** `src/modules/notifmute.js` · **Exports:** `NotifMute` · **v1.3.2+**
 
-## Purpose
+Client-side filter on `/notifications` (DOM hide only).
 
-Hide notification rows that report **likes** on your posts (client-side DOM only). Does not change X’s server-side notification preferences.
+## Toggles (defaults)
 
-## Public API
+| Toggle | Default | Storage key |
+|--------|---------|-------------|
+| Mute likes | **ON** | `tem:notifMuteLikes` (legacy `likeMuteEnabled`) |
+| Mute retweets/reposts | **ON** | `tem:notifMuteRetweets` |
+| Focus mode | **ON** | `tem:notifFocusMode` |
+| Keep replies | **ON** | `tem:notifKeepReplies` |
+| Keep new followers | **ON** | `tem:notifKeepFollows` |
+| Keep quote tweets | **ON** | `tem:notifKeepQuotes` |
+| Auto-start watcher | **ON** | `tem:likeMuteAutoStart` |
 
-| Member | Description |
-|--------|-------------|
-| `NotifMute.startWatch()` / `stopWatch()` | MutationObserver on `document.body` |
-| `NotifMute.scanDom(force)` | Hide matching cells now |
-| `NotifMute.unhideAll()` | Remove hides for current page |
-| `NotifMute.isLikeNotification(text)` | Pattern match |
+**Focus mode:** hide every row whose kind is not in the keep list (after mute rules).  
+**Without focus:** only mute likes / retweets as checked.
 
-## Storage
+## Classification
 
-- `tem:likeMuteEnabled` (default true)
-- `tem:likeMuteAutoStart` (default true)
-- `tem:likeMutePatterns` — string array
+`classify(text)` → `like` | `retweet` | `quote` | `reply` | `follow` | `mention` | `other`  
+Quote checked before retweet. Patterns editable in UI.
 
-## Selectors
+## API
 
-Primary: `[data-testid="cellInnerDiv"]` on `/notifications`.
-
-## Maintenance
-
-X copy and test ids change often. Extend patterns in the UI or `defaultPatterns` when rows stop matching.
+`startWatch` / `stopWatch` / `scanDom` / `unhideAll` / `classify` / `shouldHide`
