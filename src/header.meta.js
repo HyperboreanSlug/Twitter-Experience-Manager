@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         Twitter Experience Manager
 // @namespace    https://github.com/HyperboreanSlug/Twitter-Experience-Manager
-// @version      1.3.3
+// @version      1.3.4
 // @description  X usability toolkit: follower tracker, geo filters, mute like/retweet notifications.
 // @author       HyperboreanSlug
 // @license      MIT
 // @homepageURL  https://github.com/HyperboreanSlug/Twitter-Experience-Manager
 // @supportURL   https://github.com/HyperboreanSlug/Twitter-Experience-Manager/issues
-// @downloadURL  https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js
-// @updateURL    https://raw.githubusercontent.com/HyperboreanSlug/Twitter-Experience-Manager/main/dist/twitter-experience-manager.user.js
+// Prefer jsDelivr for updates (raw.githubusercontent.com is often CDN-cached by TM)
+// @downloadURL  https://cdn.jsdelivr.net/gh/HyperboreanSlug/Twitter-Experience-Manager@main/dist/twitter-experience-manager.user.js
+// @updateURL    https://cdn.jsdelivr.net/gh/HyperboreanSlug/Twitter-Experience-Manager@main/dist/twitter-experience-manager.user.js
 // @match        *://x.com/*
 // @match        *://*.x.com/*
 // @match        *://twitter.com/*
