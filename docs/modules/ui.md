@@ -2,4 +2,6 @@
 
 **Source:** `src/modules/ui.js` · **Exports:** `UI`
 
-Dark-glass panel (`#tem-panel`), tabs: **Followers**, **Geo Guard**, **About**. Same visual language as Tweepcred Manager with a purple accent badge.
+Top-of-page **dropdown launcher**. Starts **collapsed** (`tem-collapsed`): only a pill button **“TEM Settings”**. Click opens the settings panel (`tem-open`); minimize / click-outside / Escape collapses again.
+
+Tabs: Followers · Geo Guard · Notifs · About.

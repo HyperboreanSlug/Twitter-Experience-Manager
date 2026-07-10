@@ -14,8 +14,10 @@
 
     if (window.__temRunning) {
         var existing = document.getElementById('tem-panel');
-        if (existing) {
-            existing.classList.remove('tem-min');
+        var toggle = document.getElementById('tem-toggle');
+        if (toggle) {
+            try { toggle.click(); } catch (_) { }
+        } else if (existing) {
             try {
                 existing.animate(
                     [{ outline: '2px solid #1d9bf0' }, { outline: '2px solid transparent' }],
@@ -23,7 +25,7 @@
                 );
             } catch (_) { }
         }
-        try { console.warn('[TEM] Already running - reusing panel'); } catch (_) { }
+        try { console.warn('[TEM] Already running - toggle settings'); } catch (_) { }
         return;
     }
     window.__temRunning = true;

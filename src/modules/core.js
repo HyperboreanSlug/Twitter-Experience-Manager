@@ -3,7 +3,7 @@
  * @see docs/modules/core.md
  */
     const Core = {
-        version: '1.2.3',
+        version: '1.2.4',
         product: 'Twitter Experience Manager',
         baseUrl: 'https://' + (typeof location !== 'undefined' ? location.hostname : 'x.com'),
         // Public X web client guest token (same string shipped in x.com frontend JS).
