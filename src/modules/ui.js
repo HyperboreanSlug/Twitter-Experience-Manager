@@ -238,14 +238,15 @@
             ${p} .tem-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:var(--space-2);margin:0 0 var(--space-4);align-items:stretch}
             ${p} .tem-stats-4{grid-template-columns:repeat(4,minmax(0,1fr))}
             ${p} .tem-stat{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:64px;background:rgba(0,0,0,.18);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 6px;text-align:center}
-            ${p} .tem-stat-v{font-size:20px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.02em}
+            ${p} .tem-stat-v{font-size:20px;font-weight:800;color:var(--acc);font-variant-numeric:tabular-nums;line-height:1.15;letter-spacing:-.02em;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
             ${p} .tem-stat-l{font-size:10px;color:var(--muted);margin-top:4px;line-height:1.25;font-weight:600;letter-spacing:.02em}
             ${p} .tem-status{display:flex;align-items:center;justify-content:center;text-align:center;min-height:36px;padding:8px 12px;border-radius:var(--radius-sm);font-size:12px;font-weight:700;line-height:1.3;margin-top:var(--space-3)}
             ${p} .tem-status.run{background:rgba(23,191,99,.18);color:var(--ok)}
             ${p} .tem-status.pause{background:rgba(247,147,26,.18);color:var(--warn)}
             ${p} .tem-status.stop{background:rgba(244,33,46,.18);color:var(--danger)}
             ${p} .tem-status.idle{background:rgba(255,255,255,.06);color:var(--muted)}
-            ${p} .tem-now{background:rgba(29,155,240,.1);border:1px solid rgba(29,155,240,.3);border-radius:var(--radius-sm);padding:10px 12px;margin:var(--space-3) 0 0;font-size:13px;line-height:1.4;text-align:center}
+            ${p} .tem-now{background:rgba(29,155,240,.1);border:1px solid rgba(29,155,240,.3);border-radius:var(--radius-sm);padding:10px 12px;margin:var(--space-3) 0 0;font-size:13px;line-height:1.4;text-align:center;max-width:100%;overflow:hidden;text-overflow:ellipsis;word-break:break-word}
+            ${p} .tem-stat-v{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
             ${p} .tem-note{font-size:12px;color:var(--muted);margin:var(--space-3) 0 0;line-height:1.5}
             ${p} .tem-btns + .tem-note{margin-top:var(--space-3)}
             ${p} .tem-warn-box{background:rgba(247,147,26,.12);border:1px solid rgba(247,147,26,.35);color:#ffd9a8;border-radius:var(--radius-sm);padding:10px 12px;font-size:13px;line-height:1.45;margin:0 0 var(--space-4)}

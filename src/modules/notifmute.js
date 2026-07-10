@@ -60,12 +60,12 @@
 
               <div class="tem-section">
                 <h4>Mute like notifications</h4>
-                <p>On <code>/notifications</code>, collapse rows about likes so replies and follows stay visible.</p>
-                <div class="tem-stats">
+                <p>On the notifications page, collapse rows about likes so replies and follows stay visible.</p>
+                <div class="tem-stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-n-hidden">0</div><div class="tem-stat-l">Hidden (session)</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-n-state">Off</div><div class="tem-stat-l">Watcher</div></div>
-                  <div class="tem-stat"><div class="tem-stat-v" id="tem-n-path">–</div><div class="tem-stat-l">Path</div></div>
                 </div>
+                <div class="tem-now" id="tem-n-path" title="Current path">Path: –</div>
                 <label class="tem-check"><input type="checkbox" id="tem-n-enabled" ${enabled ? 'checked' : ''}> Enable like-mute when watching</label>
                 <label class="tem-check"><input type="checkbox" id="tem-n-autostart" ${autoStart ? 'checked' : ''}> Auto-start watcher when script loads</label>
                 <div class="tem-btns">
@@ -134,9 +134,20 @@
             if (s) s.textContent = this.watching ? 'On' : 'Off';
             if (p) {
                 try {
-                    const path = (location.pathname || '/').split('?')[0];
-                    p.textContent = path.length > 14 ? path.slice(0, 12) + '…' : path;
-                } catch (_) { p.textContent = '–'; }
+                    const path = (location.pathname || '/').split('?')[0] || '/';
+                    p.textContent = 'Path: ' + path;
+                    p.title = path;
+                    p.style.display = 'block';
+                    // Keep long paths inside the panel
+                    p.style.overflow = 'hidden';
+                    p.style.textOverflow = 'ellipsis';
+                    p.style.whiteSpace = 'nowrap';
+                    p.style.wordBreak = 'break-all';
+                    p.style.fontFamily = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
+                    p.style.fontSize = '12px';
+                } catch (_) {
+                    p.textContent = 'Path: –';
+                }
             }
         },
 
