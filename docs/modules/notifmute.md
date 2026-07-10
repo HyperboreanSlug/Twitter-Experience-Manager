@@ -1,29 +1,23 @@
 # Module: `notifmute`
 
-**Source:** `src/modules/notifmute.js` · **Exports:** `NotifMute` · **v1.3.2+**
+**Source:** `src/modules/notifmute.js` · **Exports:** `NotifMute`
 
-Client-side filter on `/notifications` (DOM hide only).
+Client-side mute of **likes** and **retweets/reposts** on `/notifications` only.  
+**No focus mode** — replies, follows, quotes, mentions stay visible.
 
-## Toggles (defaults)
+## Toggles
 
-| Toggle | Default | Storage key |
-|--------|---------|-------------|
-| Mute likes | **ON** | `tem:notifMuteLikes` (legacy `likeMuteEnabled`) |
-| Mute retweets/reposts | **ON** | `tem:notifMuteRetweets` |
-| Focus mode | **ON** | `tem:notifFocusMode` |
-| Keep replies | **ON** | `tem:notifKeepReplies` |
-| Keep new followers | **ON** | `tem:notifKeepFollows` |
-| Keep quote tweets | **ON** | `tem:notifKeepQuotes` |
-| Auto-start watcher | **ON** | `tem:likeMuteAutoStart` |
+| Toggle | Default | Key |
+|--------|---------|-----|
+| Mute likes | ON | `tem:notifMuteLikes` |
+| Mute retweets/reposts | ON | `tem:notifMuteRetweets` |
+| Auto-start | ON | `tem:likeMuteAutoStart` |
 
-**Focus mode:** hide every row whose kind is not in the keep list (after mute rules).  
-**Without focus:** only mute likes / retweets as checked.
+Legacy `tem:notifFocusMode` is forced **false** on open.
 
-## Classification
+## Loop guards
 
-`classify(text)` → `like` | `retweet` | `quote` | `reply` | `follow` | `mention` | `other`  
-Quote checked before retweet. Patterns editable in UI.
-
-## API
-
-`startWatch` / `stopWatch` / `scanDom` / `unhideAll` / `classify` / `shouldHide`
+- `_scanning` blocks re-entrant `scanDom`
+- `_scanScheduled` coalesces MutationObserver → rAF
+- Observe `primaryColumn` when present (not entire `body` side effects alone)
+- Only hide cells classified as `like` or `retweet`
