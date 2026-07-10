@@ -7,10 +7,13 @@
         firstShow: true,
         watching: false,
         observer: null,
-        _pollTimer: null,
+        _pathTimer: null,
+        _observeTarget: null,
         hiddenThisSession: 0,
         _scanScheduled: false,
         _scanning: false,
+        /** Min ms between full notification scans */
+        scanDebounceMs: 500,
 
         defaultLikePatterns: [
             'liked your post',
@@ -213,6 +216,44 @@
             if (stop) stop.disabled = !on;
         },
 
+        _onNotifsPath() {
+            return (location.pathname || '').toLowerCase().indexOf('/notifications') !== -1;
+        },
+
+        /**
+         * Only attach a scoped MutationObserver while on /notifications.
+         * Avoids document-wide observers that lag the whole X app.
+         */
+        _bindPageObserver() {
+            if (!this.watching) return;
+            if (!this._onNotifsPath()) {
+                this._unbindObserver();
+                return;
+            }
+            const col = document.querySelector('[data-testid="primaryColumn"]') ||
+                document.querySelector('main[role="main"]');
+            if (!col) return;
+            if (this.observer && this._observeTarget === col) return;
+
+            this._unbindObserver();
+            this._observeTarget = col;
+            this.observer = new MutationObserver(() => this.scheduleScan());
+            try {
+                this.observer.observe(col, { childList: true, subtree: true });
+            } catch (e) {
+                console.warn('[TEM NotifMute] observer failed', e);
+            }
+            this.scheduleScan();
+        },
+
+        _unbindObserver() {
+            if (this.observer) {
+                try { this.observer.disconnect(); } catch (_) { }
+                this.observer = null;
+            }
+            this._observeTarget = null;
+        },
+
         startWatch() {
             if (this.watching) return;
             this.watching = true;
@@ -220,41 +261,25 @@
             this.setStatus('run', 'Watching notifications…');
             this.refreshStats();
 
-            // Always observe document — primaryColumn is replaced on SPA navigations
-            if (this.observer) {
-                try { this.observer.disconnect(); } catch (_) { }
-            }
-            this.observer = new MutationObserver(() => this.scheduleScan());
-            try {
-                this.observer.observe(document.documentElement || document.body, {
-                    childList: true,
-                    subtree: true
-                });
-            } catch (e) {
-                console.warn('[TEM NotifMute] observer failed', e);
-            }
-
-            // Backup poll: catches soft-nav to /notifications and virtualized lists
-            if (this._pollTimer) clearInterval(this._pollTimer);
-            this._pollTimer = setInterval(() => {
+            this._bindPageObserver();
+            // Light path check only (no DOM scan) — rebind observer after SPA nav
+            if (this._pathTimer) clearInterval(this._pathTimer);
+            this._pathTimer = setInterval(() => {
                 if (!this.watching) return;
-                if ((location.pathname || '').toLowerCase().indexOf('/notifications') === -1) return;
-                this.scheduleScan();
-            }, 1500);
+                this._bindPageObserver();
+            }, 2500);
 
-            this.scanDom(true);
+            if (this._onNotifsPath()) this.scanDom(true);
+            else this._setDebug('Idle until you open /notifications');
         },
 
         stopWatch() {
             this.watching = false;
             this._scanScheduled = false;
-            if (this.observer) {
-                try { this.observer.disconnect(); } catch (_) { }
-                this.observer = null;
-            }
-            if (this._pollTimer) {
-                clearInterval(this._pollTimer);
-                this._pollTimer = null;
+            this._unbindObserver();
+            if (this._pathTimer) {
+                clearInterval(this._pathTimer);
+                this._pathTimer = null;
             }
             this._setWatchUi(false);
             this.setStatus('idle', 'Stopped');
@@ -263,13 +288,14 @@
 
         scheduleScan() {
             if (!this.watching || this._scanning || this._scanScheduled) return;
+            if (!this._onNotifsPath()) return;
             this._scanScheduled = true;
-            const run = () => {
+            setTimeout(() => {
                 this._scanScheduled = false;
-                if (this.watching && !this._scanning) this.scanDom(false);
-            };
-            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-            else setTimeout(run, 50);
+                if (this.watching && !this._scanning && this._onNotifsPath()) {
+                    this.scanDom(false);
+                }
+            }, this.scanDebounceMs);
         },
 
         _norm(text) {
@@ -300,21 +326,25 @@
         },
 
         /**
-         * Richer text than textContent alone — X often puts the phrase in aria-label.
+         * Prefer cheap text first; only sample a few aria-labels (X puts copy there).
          */
         _cellText(cell) {
             if (!cell) return '';
-            const chunks = [];
+            // Skip rows already classified this page load with same filter gen
+            const t = (cell.innerText || cell.textContent || '').slice(0, 800);
+            if (t.length > 20) return t;
             try {
                 const labeled = cell.querySelectorAll('[aria-label]');
-                for (let i = 0; i < labeled.length && i < 40; i++) {
+                const max = Math.min(labeled.length, 8);
+                const parts = [t];
+                for (let i = 0; i < max; i++) {
                     const a = labeled[i].getAttribute('aria-label');
-                    if (a && a.length > 2 && a.length < 400) chunks.push(a);
+                    if (a && a.length > 2 && a.length < 300) parts.push(a);
                 }
-            } catch (_) { }
-            chunks.push(cell.innerText || '');
-            chunks.push(cell.textContent || '');
-            return chunks.join(' \n ');
+                return parts.join(' ');
+            } catch (_) {
+                return t;
+            }
         },
 
         isLikeNotification(text) {
@@ -412,27 +442,31 @@
                 let likes = 0;
                 let rts = 0;
                 const cells = this._cells();
-                for (let i = 0; i < cells.length; i++) {
+                // Cap work per pass (virtualized lists; rest caught on next debounce)
+                const limit = Math.min(cells.length, 40);
+                for (let i = 0; i < limit; i++) {
                     const cell = cells[i];
-                    // Skip TEM UI if it somehow appears in column
                     if (cell.closest && cell.closest('#tem-panel')) continue;
-                    if (cell.getAttribute('data-tem-like-hidden') === '1') {
-                        seen++;
-                        continue;
-                    }
+                    if (cell.getAttribute('data-tem-like-hidden') === '1') continue;
+                    // Already decided not to hide this node under current rules
+                    if (cell.getAttribute('data-tem-notif-skip') === '1' && !force) continue;
 
                     const text = this._cellText(cell);
                     if (!this._norm(text)) continue;
                     seen++;
 
                     const kind = this.matchMuteKind(text);
-                    if (!kind || !this.shouldHide(kind)) continue;
+                    if (!kind || !this.shouldHide(kind)) {
+                        cell.setAttribute('data-tem-notif-skip', '1');
+                        continue;
+                    }
 
                     if (kind === 'like') likes++;
                     if (kind === 'retweet') rts++;
 
                     cell.setAttribute('data-tem-like-hidden', '1');
                     cell.setAttribute('data-tem-notif-kind', kind);
+                    cell.removeAttribute('data-tem-notif-skip');
                     cell.style.setProperty('display', 'none', 'important');
                     newly++;
                     this.hiddenThisSession++;
@@ -463,11 +497,12 @@
         },
 
         unhideAll(silent) {
-            const nodes = document.querySelectorAll('[data-tem-like-hidden="1"]');
+            const nodes = document.querySelectorAll('[data-tem-like-hidden="1"], [data-tem-notif-skip="1"]');
             for (let i = 0; i < nodes.length; i++) {
                 const el = nodes[i];
                 el.removeAttribute('data-tem-like-hidden');
                 el.removeAttribute('data-tem-notif-kind');
+                el.removeAttribute('data-tem-notif-skip');
                 el.style.removeProperty('display');
             }
             if (!silent) this.setStatus('idle', 'Unhid ' + nodes.length + ' row(s)');

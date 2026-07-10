@@ -111,15 +111,25 @@
             });
 
             // Click outside closes dropdown (ignore while dragging)
-            document.addEventListener('pointerdown', (e) => {
+            // Capture once per panel instance; avoid stacking listeners on rebuild
+            if (this._outsideCloser) {
+                document.removeEventListener('pointerdown', this._outsideCloser, true);
+            }
+            this._outsideCloser = (e) => {
                 if (!this.open || this._dragging) return;
-                if (panel.contains(e.target)) return;
+                const p = document.getElementById(this.id);
+                if (!p || p.contains(e.target)) return;
                 setOpen(false);
-            }, true);
+            };
+            document.addEventListener('pointerdown', this._outsideCloser, true);
 
-            document.addEventListener('keydown', (e) => {
+            if (this._escCloser) {
+                document.removeEventListener('keydown', this._escCloser);
+            }
+            this._escCloser = (e) => {
                 if (e.key === 'Escape' && this.open) setOpen(false);
-            });
+            };
+            document.addEventListener('keydown', this._escCloser);
 
             this._restorePosition(panel);
             this.makeDraggable(panel, [toggle, header]);

@@ -18,8 +18,13 @@
         scannedThisSession: 0,
         logLines: [],
         profileCache: {},           // handle -> profile + match meta
-        delayMs: 1100,
+        delayMs: 1200,
         _scanScheduled: false,
+        _scanTimer: null,
+        _observeTarget: null,
+        _logPaintTimer: null,
+        /** Min ms between DOM scans (performance) */
+        scanDebounceMs: 600,
         // Local match database (localStorage tem:geoDb) — exportable, uncapped
         dbSchemaVersion: 1,
 
@@ -512,18 +517,55 @@
         log(msg, data) {
             const line = { at: new Date().toISOString(), msg, ...(data || {}) };
             this.logLines.push(line);
-            if (this.logLines.length > 500) this.logLines.shift();
-            console.log('[TEM GeoGuard]', msg, data || '');
-            this._paintLog();
+            if (this.logLines.length > 120) this.logLines.shift();
+            // Avoid console spam + DOM thrash on every LOC miss
+            if (msg !== 'LOC miss') {
+                try { console.log('[TEM GeoGuard]', msg, data || ''); } catch (_) { }
+            }
+            this._schedulePaintLog();
+        },
+
+        _schedulePaintLog() {
+            if (this._logPaintTimer) return;
+            this._logPaintTimer = setTimeout(() => {
+                this._logPaintTimer = null;
+                this._paintLog();
+            }, 400);
         },
 
         _paintLog() {
             const el = UI.el('tem-g-log');
             if (!el) return;
-            const recent = this.logLines.slice(-80).reverse();
+            const recent = this.logLines.slice(-40).reverse();
             el.innerHTML = recent.map(l =>
                 `<div>${Core.escapeHtml(l.at.slice(11, 19))} ${Core.escapeHtml(l.msg)}${l.handle ? ' @' + Core.escapeHtml(l.handle) : ''}${l.reason ? ' — ' + Core.escapeHtml(l.reason) : ''}</div>`
             ).join('') || '<div class="tem-note">No events yet.</div>';
+        },
+
+        _unbindObserver() {
+            if (this.observer) {
+                try { this.observer.disconnect(); } catch (_) { }
+                this.observer = null;
+            }
+            this._observeTarget = null;
+        },
+
+        _bindTimelineObserver() {
+            if (!this.watching) return;
+            const col = document.querySelector('[data-testid="primaryColumn"]') ||
+                document.querySelector('main[role="main"]');
+            if (!col) return;
+            if (this.observer && this._observeTarget === col) return;
+            this._unbindObserver();
+            this._observeTarget = col;
+            this.observer = new MutationObserver(() => {
+                if (this.watching) this.scheduleScan();
+            });
+            try {
+                this.observer.observe(col, { childList: true, subtree: true });
+            } catch (e) {
+                console.warn('[TEM GeoGuard] observer failed', e);
+            }
         },
 
         startWatch() {
@@ -543,28 +585,29 @@
                 ' · needles=' + needles + ' · scripts=' + scripts);
             this.setNow('Active: ' + needles + ' location needles (South Africa excluded)');
 
-            this.scanDom();
+            this._bindTimelineObserver();
+            // Rebind if SPA replaces primaryColumn (cheap; no full document observe)
+            if (this._pathTimer) clearInterval(this._pathTimer);
+            this._pathTimer = setInterval(() => {
+                if (this.watching) this._bindTimelineObserver();
+            }, 3000);
 
-            this.observer = new MutationObserver(() => {
-                if (!this.watching) return;
-                this.scheduleScan();
-            });
-            try {
-                this.observer.observe(document.body || document.documentElement, {
-                    childList: true, subtree: true
-                });
-            } catch (e) {
-                console.warn('[TEM GeoGuard] observer failed', e);
-            }
+            this.scanDom();
             this._pump();
         },
 
         stopWatch() {
             this.watching = false;
-            if (this.observer) {
-                try { this.observer.disconnect(); } catch (_) { }
-                this.observer = null;
+            this._scanScheduled = false;
+            if (this._scanTimer) {
+                clearTimeout(this._scanTimer);
+                this._scanTimer = null;
             }
+            if (this._pathTimer) {
+                clearInterval(this._pathTimer);
+                this._pathTimer = null;
+            }
+            this._unbindObserver();
             this._setWatchUi(false);
             this.setStatus('idle', 'Stopped');
             this.setNow('');
@@ -572,14 +615,14 @@
         },
 
         scheduleScan() {
-            if (this._scanScheduled) return;
+            if (!this.watching || this._scanScheduled) return;
             this._scanScheduled = true;
-            const run = () => {
+            if (this._scanTimer) clearTimeout(this._scanTimer);
+            this._scanTimer = setTimeout(() => {
+                this._scanTimer = null;
                 this._scanScheduled = false;
                 if (this.watching) this.scanDom();
-            };
-            if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
-            else setTimeout(run, 50);
+            }, this.scanDebounceMs);
         },
 
         _setWatchUi(on) {
@@ -660,39 +703,55 @@
         },
 
         /**
-         * Extract author handles from visible tweets / UserCells; re-apply soft hides.
+         * Extract author handles from visible tweets; re-apply soft hides.
+         * Scoped to primary column; skips already-seen articles; no sidebar crawl.
          */
         scanDom() {
-            const handles = new Set();
             const soft = Core.store.get('geoSoftHide', true);
             const db = soft ? this.loadDb() : null;
+            const root = document.querySelector('[data-testid="primaryColumn"]') ||
+                document.querySelector('main[role="main"]') ||
+                document;
+            const articles = root.querySelectorAll('article[data-testid="tweet"]');
+            const limit = Math.min(articles.length, 30);
+            let queued = 0;
 
-            const articles = document.querySelectorAll('article[data-testid="tweet"]');
-            for (let i = 0; i < articles.length; i++) {
+            for (let i = 0; i < limit; i++) {
                 const article = articles[i];
+                if (article.getAttribute('data-tem-geo-seen') === '1') {
+                    // Still re-apply hide for matched authors on recycled nodes
+                    if (soft) {
+                        const h0 = this.authorFromArticle(article);
+                        if (h0) {
+                            const k0 = h0.toLowerCase();
+                            if (this.matchedHandles.has(k0) || (db && db.accounts[k0])) {
+                                this.hideArticle(article, h0, 'cached match');
+                            }
+                        }
+                    }
+                    continue;
+                }
+
                 const h = this.authorFromArticle(article);
-                if (!h) continue;
+                if (!h) {
+                    article.setAttribute('data-tem-geo-seen', '1');
+                    continue;
+                }
                 const key = h.toLowerCase();
-                // Session match or persistent DB hit → soft-hide without re-queue
+                article.setAttribute('data-tem-geo-seen', '1');
+
                 if (soft && (this.matchedHandles.has(key) || (db && db.accounts[key]))) {
                     if (db && db.accounts[key]) this.matchedHandles.add(key);
                     this.hideArticle(article, h, 'cached match');
                 }
-                handles.add(h);
-            }
 
-            // Who-to-follow / sidebar cells
-            document.querySelectorAll('[data-testid="UserCell"]').forEach(cell => {
-                const h = Follow.getUsername(cell);
-                if (h && h !== 'unknown') handles.add(h);
-            });
-
-            for (const h of handles) {
-                const key = h.toLowerCase();
                 if (this.seen.has(key)) continue;
                 if (Core.username && key === Core.username.toLowerCase()) continue;
                 this.seen.add(key);
                 this.queue.push(h);
+                queued++;
+                // Cap new API work enqueued per scan pass
+                if (queued >= 12) break;
             }
             this.refreshStats();
         },
@@ -703,12 +762,13 @@
             try {
                 while (this.watching) {
                     if (!this.queue.length) {
-                        await Core.sleep(400);
+                        // Idle sleep — do not busy-loop the main thread
+                        await Core.sleep(1200);
                         continue;
                     }
                     const handle = this.queue.shift();
                     await this.evaluateHandle(handle);
-                    await Core.sleep(this.delayMs + Core.rand(0, 350));
+                    await Core.sleep(this.delayMs + Core.rand(0, 250));
                 }
             } finally {
                 this.processing = false;
@@ -1031,7 +1091,7 @@
             const { match, reason, reasonCode, reasonNeedle } = this.matchRegion(profile);
             if (!match) {
                 this.setNow('@' + handle + ' · ' + locLabel + ' — no region match');
-                this.log('LOC miss', { handle, location: profile.location || '' });
+                // No log line / console for misses (perf); only update status
                 return;
             }
 
