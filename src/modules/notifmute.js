@@ -6,14 +6,11 @@
     const NotifMute = {
         firstShow: true,
         watching: false,
-        observer: null,
-        _pathTimer: null,
-        _observeTarget: null,
+        _tickTimer: null,
         hiddenThisSession: 0,
-        _scanScheduled: false,
         _scanning: false,
-        /** Min ms between full notification scans */
-        scanDebounceMs: 500,
+        /** Slow tick while watching — no MutationObserver (main lag source) */
+        tickMs: 2000,
 
         defaultLikePatterns: [
             'liked your post',
@@ -74,7 +71,7 @@
             return {
                 muteLikes: !!muteLikes,
                 muteRetweets: !!muteRetweets,
-                autoStart: Core.store.get('likeMuteAutoStart', true) !== false
+                autoStart: !!Core.store.get('likeMuteAutoStart', false)
             };
         },
 
@@ -105,7 +102,7 @@
 
                 <label class="tem-check"><input type="checkbox" id="tem-n-mute-likes" ${f.muteLikes ? 'checked' : ''}> Mute <strong>likes</strong></label>
                 <label class="tem-check"><input type="checkbox" id="tem-n-mute-rt" ${f.muteRetweets ? 'checked' : ''}> Mute <strong>retweets / reposts</strong></label>
-                <label class="tem-check"><input type="checkbox" id="tem-n-autostart" ${f.autoStart ? 'checked' : ''}> Auto-start watcher when script loads</label>
+                <label class="tem-check"><input type="checkbox" id="tem-n-autostart" ${f.autoStart ? 'checked' : ''}> Auto-start watcher (off by default — keep off for performance)</label>
 
                 <div class="tem-btns">
                   <button class="tem-btn tem-btn-primary" id="tem-n-start" type="button">Start watcher</button>
@@ -220,40 +217,6 @@
             return (location.pathname || '').toLowerCase().indexOf('/notifications') !== -1;
         },
 
-        /**
-         * Only attach a scoped MutationObserver while on /notifications.
-         * Avoids document-wide observers that lag the whole X app.
-         */
-        _bindPageObserver() {
-            if (!this.watching) return;
-            if (!this._onNotifsPath()) {
-                this._unbindObserver();
-                return;
-            }
-            const col = document.querySelector('[data-testid="primaryColumn"]') ||
-                document.querySelector('main[role="main"]');
-            if (!col) return;
-            if (this.observer && this._observeTarget === col) return;
-
-            this._unbindObserver();
-            this._observeTarget = col;
-            this.observer = new MutationObserver(() => this.scheduleScan());
-            try {
-                this.observer.observe(col, { childList: true, subtree: true });
-            } catch (e) {
-                console.warn('[TEM NotifMute] observer failed', e);
-            }
-            this.scheduleScan();
-        },
-
-        _unbindObserver() {
-            if (this.observer) {
-                try { this.observer.disconnect(); } catch (_) { }
-                this.observer = null;
-            }
-            this._observeTarget = null;
-        },
-
         startWatch() {
             if (this.watching) return;
             this.watching = true;
@@ -261,13 +224,16 @@
             this.setStatus('run', 'Watching notifications…');
             this.refreshStats();
 
-            this._bindPageObserver();
-            // Light path check only (no DOM scan) — rebind observer after SPA nav
-            if (this._pathTimer) clearInterval(this._pathTimer);
-            this._pathTimer = setInterval(() => {
-                if (!this.watching) return;
-                this._bindPageObserver();
-            }, 2500);
+            // No MutationObserver — fixed slow tick only while watching
+            if (this._tickTimer) clearInterval(this._tickTimer);
+            this._tickTimer = setInterval(() => {
+                if (!this.watching || this._scanning) return;
+                if (!this._onNotifsPath()) {
+                    this._setDebug('Idle (open /notifications)');
+                    return;
+                }
+                this.scanDom(false);
+            }, this.tickMs);
 
             if (this._onNotifsPath()) this.scanDom(true);
             else this._setDebug('Idle until you open /notifications');
@@ -275,27 +241,13 @@
 
         stopWatch() {
             this.watching = false;
-            this._scanScheduled = false;
-            this._unbindObserver();
-            if (this._pathTimer) {
-                clearInterval(this._pathTimer);
-                this._pathTimer = null;
+            if (this._tickTimer) {
+                clearInterval(this._tickTimer);
+                this._tickTimer = null;
             }
             this._setWatchUi(false);
             this.setStatus('idle', 'Stopped');
             this.refreshStats();
-        },
-
-        scheduleScan() {
-            if (!this.watching || this._scanning || this._scanScheduled) return;
-            if (!this._onNotifsPath()) return;
-            this._scanScheduled = true;
-            setTimeout(() => {
-                this._scanScheduled = false;
-                if (this.watching && !this._scanning && this._onNotifsPath()) {
-                    this.scanDom(false);
-                }
-            }, this.scanDebounceMs);
         },
 
         _norm(text) {

@@ -10,43 +10,21 @@
             }
             Core.init();
             UI.build();
-            Followers.render();
-            Followers.firstShow = false;
-            GeoGuard.render();
-            GeoGuard.firstShow = false;
-            NotifMute.render();
-            NotifMute.firstShow = false;
-            About.render();
-            UI.switchTab('followers');
-
-            setTimeout(function () {
-                try {
-                    if (Core.store.get('geoAutoStart', false)) GeoGuard.startWatch();
-                } catch (e1) {
-                    try { console.warn('[TEM] geo autostart failed', e1); } catch (_) { }
-                }
-                try {
-                    // Always default-on unless user explicitly disabled auto-start
-                    if (Core.store.get('likeMuteAutoStart', true) !== false) {
-                        NotifMute.startWatch();
-                    }
-                } catch (e2) {
-                    try { console.warn('[TEM] notif autostart failed', e2); } catch (_) { }
-                }
-            }, 1200);
-
+            // Lazy UI: do not pre-render heavy panes (Geo region tree, etc.) at boot
+            // First open of each tab builds its DOM via onShow/firstShow
             try {
                 console.log(
                     '%c[TEM] Twitter Experience Manager v' + Core.version + ' ready @' + (Core.username || '?'),
                     'color:#7856ff;font-weight:bold;font-size:13px'
                 );
             } catch (_) { }
+
+            // No auto-start watchers — user opts in. Prevents background lag on every X page.
         } catch (err) {
             try {
                 console.error('[TEM] BOOT FAILED', err);
             } catch (_) { }
             try {
-                // Visible failure so Violentmonkey inject success is obvious vs runtime crash
                 var banner = document.createElement('div');
                 banner.id = 'tem-boot-error';
                 banner.setAttribute('style',

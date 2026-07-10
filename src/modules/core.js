@@ -3,7 +3,7 @@
  * @see docs/modules/core.md
  */
     const Core = {
-        version: '1.3.6',
+        version: '1.3.7',
         product: 'Twitter Experience Manager',
         baseUrl: 'https://' + (typeof location !== 'undefined' ? location.hostname : 'x.com'),
         // Public X web client guest token (same string shipped in x.com frontend JS).
@@ -22,7 +22,7 @@
                 this.ct0 = this.getCookie('ct0');
                 this.updateTransactionId();
                 this.refreshIdentity();
-                this.installQuerySniffer();
+                // Do NOT install fetch sniffer at boot — only when GraphQL lookup is needed
             } catch (e) {
                 try { console.error('[TEM] Core.init error', e); } catch (_) { }
             }
@@ -87,12 +87,23 @@
 
         async resolveQueryId(operationName) {
             if (this._queryIds[operationName]) return this._queryIds[operationName];
+            // Install sniffer lazily the first time we need a query id
+            this.installQuerySniffer();
+            // Wait briefly for page traffic to populate ids (no main-thread scan of all scripts)
+            for (let i = 0; i < 6 && !this._queryIds[operationName]; i++) {
+                await this.sleep(200);
+                if (this._queryIds[operationName]) return this._queryIds[operationName];
+            }
+            if (this._queryIds[operationName]) return this._queryIds[operationName];
+
+            // Fallback: only try a few high-value client bundles (cap downloads)
             const rank = (u) => (/\bapi[.\-]/.test(u) ? 3 : 0) + (/\bmain[.\-]/.test(u) ? 2 : 0) + (/endpoint/i.test(u) ? 2 : 0);
             let urls = [];
             try { urls = performance.getEntriesByType('resource').map(r => r.name); } catch (_) { }
-            document.querySelectorAll('script[src]').forEach(s => urls.push(s.src));
-            urls = [...new Set(urls)].filter(n => /abs\.twimg\.com\/responsive-web\/client-web.*\.js(\?|$)/.test(n));
-            urls.sort((a, b) => rank(b) - rank(a));
+            urls = [...new Set(urls)]
+                .filter(n => /abs\.twimg\.com\/responsive-web\/client-web.*\.js(\?|$)/.test(n))
+                .sort((a, b) => rank(b) - rank(a))
+                .slice(0, 4);
             for (const u of urls) {
                 try {
                     const res = await fetch(u, { credentials: 'omit' });

@@ -18,13 +18,12 @@
         scannedThisSession: 0,
         logLines: [],
         profileCache: {},           // handle -> profile + match meta
-        delayMs: 1200,
-        _scanScheduled: false,
-        _scanTimer: null,
-        _observeTarget: null,
+        delayMs: 1500,
+        _tickTimer: null,
+        _pumpTimer: null,
         _logPaintTimer: null,
-        /** Min ms between DOM scans (performance) */
-        scanDebounceMs: 600,
+        /** Slow DOM tick — no MutationObserver */
+        tickMs: 2500,
         // Local match database (localStorage tem:geoDb) — exportable, uncapped
         dbSchemaVersion: 1,
 
@@ -517,112 +516,74 @@
         log(msg, data) {
             const line = { at: new Date().toISOString(), msg, ...(data || {}) };
             this.logLines.push(line);
-            if (this.logLines.length > 120) this.logLines.shift();
-            // Avoid console spam + DOM thrash on every LOC miss
-            if (msg !== 'LOC miss') {
-                try { console.log('[TEM GeoGuard]', msg, data || ''); } catch (_) { }
-            }
+            if (this.logLines.length > 60) this.logLines.shift();
+            // No console.log during watch (major cost when DevTools open)
             this._schedulePaintLog();
         },
 
         _schedulePaintLog() {
+            // Only paint log if Geo tab pane is visible
+            const pane = UI.el('tem-pane-geoguard');
+            if (!pane || !pane.classList.contains('tem-active')) return;
             if (this._logPaintTimer) return;
             this._logPaintTimer = setTimeout(() => {
                 this._logPaintTimer = null;
                 this._paintLog();
-            }, 400);
+            }, 800);
         },
 
         _paintLog() {
             const el = UI.el('tem-g-log');
             if (!el) return;
-            const recent = this.logLines.slice(-40).reverse();
+            const recent = this.logLines.slice(-24).reverse();
             el.innerHTML = recent.map(l =>
                 `<div>${Core.escapeHtml(l.at.slice(11, 19))} ${Core.escapeHtml(l.msg)}${l.handle ? ' @' + Core.escapeHtml(l.handle) : ''}${l.reason ? ' — ' + Core.escapeHtml(l.reason) : ''}</div>`
             ).join('') || '<div class="tem-note">No events yet.</div>';
         },
 
-        _unbindObserver() {
-            if (this.observer) {
-                try { this.observer.disconnect(); } catch (_) { }
-                this.observer = null;
-            }
-            this._observeTarget = null;
-        },
-
-        _bindTimelineObserver() {
-            if (!this.watching) return;
-            const col = document.querySelector('[data-testid="primaryColumn"]') ||
-                document.querySelector('main[role="main"]');
-            if (!col) return;
-            if (this.observer && this._observeTarget === col) return;
-            this._unbindObserver();
-            this._observeTarget = col;
-            this.observer = new MutationObserver(() => {
-                if (this.watching) this.scheduleScan();
-            });
-            try {
-                this.observer.observe(col, { childList: true, subtree: true });
-            } catch (e) {
-                console.warn('[TEM GeoGuard] observer failed', e);
-            }
-        },
-
         startWatch() {
             if (this.watching) return;
-            // Capture current checkbox selection before evaluating
             this._persistRegionsFromDom(false);
             this.watching = true;
             this._setWatchUi(true);
             const soft = Core.store.get('geoSoftHide', true);
             const dry = Core.store.get('geoDryRun', true);
             const needles = this._activeNeedleEntries().length;
-            const scripts = [...this._activeScripts()].join(',') || 'none';
             this.setStatus('run', 'Watching timeline…');
             this.log('Watch started' +
                 (soft ? ' · soft-hide ON' : ' · soft-hide OFF') +
                 (dry ? ' · no live-block' : ' · LIVE BLOCK') +
-                ' · needles=' + needles + ' · scripts=' + scripts);
-            this.setNow('Active: ' + needles + ' location needles (South Africa excluded)');
+                ' · needles=' + needles);
+            this.setNow('Active: ' + needles + ' needles · low-power mode (2.5s ticks)');
 
-            this._bindTimelineObserver();
-            // Rebind if SPA replaces primaryColumn (cheap; no full document observe)
-            if (this._pathTimer) clearInterval(this._pathTimer);
-            this._pathTimer = setInterval(() => {
-                if (this.watching) this._bindTimelineObserver();
-            }, 3000);
+            // No MutationObserver — infrequent tick only
+            if (this._tickTimer) clearInterval(this._tickTimer);
+            this._tickTimer = setInterval(() => {
+                if (!this.watching) return;
+                this.scanDom();
+                this._kickPump();
+            }, this.tickMs);
 
             this.scanDom();
-            this._pump();
+            this._kickPump();
         },
 
         stopWatch() {
             this.watching = false;
-            this._scanScheduled = false;
-            if (this._scanTimer) {
-                clearTimeout(this._scanTimer);
-                this._scanTimer = null;
+            this.queue.length = 0;
+            if (this._tickTimer) {
+                clearInterval(this._tickTimer);
+                this._tickTimer = null;
             }
-            if (this._pathTimer) {
-                clearInterval(this._pathTimer);
-                this._pathTimer = null;
+            if (this._pumpTimer) {
+                clearTimeout(this._pumpTimer);
+                this._pumpTimer = null;
             }
-            this._unbindObserver();
+            this.processing = false;
             this._setWatchUi(false);
             this.setStatus('idle', 'Stopped');
             this.setNow('');
             this.log('Watch stopped');
-        },
-
-        scheduleScan() {
-            if (!this.watching || this._scanScheduled) return;
-            this._scanScheduled = true;
-            if (this._scanTimer) clearTimeout(this._scanTimer);
-            this._scanTimer = setTimeout(() => {
-                this._scanTimer = null;
-                this._scanScheduled = false;
-                if (this.watching) this.scanDom();
-            }, this.scanDebounceMs);
         },
 
         _setWatchUi(on) {
@@ -678,8 +639,10 @@
             if (!Core.store.get('geoSoftHide', true)) return 0;
             const key = String(handle || '').toLowerCase();
             let n = 0;
-            const articles = document.querySelectorAll('article[data-testid="tweet"]');
-            for (let i = 0; i < articles.length; i++) {
+            const root = document.querySelector('[data-testid="primaryColumn"]') || document;
+            const articles = root.querySelectorAll('article[data-testid="tweet"]');
+            const limit = Math.min(articles.length, 24);
+            for (let i = 0; i < limit; i++) {
                 const a = articles[i];
                 const h = this.authorFromArticle(a);
                 if (!h || h.toLowerCase() !== key) continue;
@@ -703,46 +666,38 @@
         },
 
         /**
-         * Extract author handles from visible tweets; re-apply soft hides.
-         * Scoped to primary column; skips already-seen articles; no sidebar crawl.
+         * Light scan: only NEW tweets in main column (max 12). No sidebar. No MO.
          */
         scanDom() {
+            if (!this.watching) return;
             const soft = Core.store.get('geoSoftHide', true);
-            const db = soft ? this.loadDb() : null;
-            const root = document.querySelector('[data-testid="primaryColumn"]') ||
-                document.querySelector('main[role="main"]') ||
-                document;
-            const articles = root.querySelectorAll('article[data-testid="tweet"]');
-            const limit = Math.min(articles.length, 30);
+            let dbAccounts = null;
+            if (soft) {
+                try { dbAccounts = (this.loadDb().accounts) || null; } catch (_) { dbAccounts = null; }
+            }
+            const root = document.querySelector('[data-testid="primaryColumn"]');
+            if (!root) return;
+            const articles = root.querySelectorAll('article[data-testid="tweet"]:not([data-tem-geo-seen="1"])');
+            const limit = Math.min(articles.length, 12);
             let queued = 0;
 
             for (let i = 0; i < limit; i++) {
                 const article = articles[i];
-                if (article.getAttribute('data-tem-geo-seen') === '1') {
-                    // Still re-apply hide for matched authors on recycled nodes
-                    if (soft) {
-                        const h0 = this.authorFromArticle(article);
-                        if (h0) {
-                            const k0 = h0.toLowerCase();
-                            if (this.matchedHandles.has(k0) || (db && db.accounts[k0])) {
-                                this.hideArticle(article, h0, 'cached match');
-                            }
-                        }
-                    }
-                    continue;
-                }
-
-                const h = this.authorFromArticle(article);
-                if (!h) {
-                    article.setAttribute('data-tem-geo-seen', '1');
-                    continue;
-                }
-                const key = h.toLowerCase();
                 article.setAttribute('data-tem-geo-seen', '1');
 
-                if (soft && (this.matchedHandles.has(key) || (db && db.accounts[key]))) {
-                    if (db && db.accounts[key]) this.matchedHandles.add(key);
+                const h = this.authorFromArticle(article);
+                if (!h) continue;
+                const key = h.toLowerCase();
+
+                let dbHit = false;
+                if (soft && this.matchedHandles.has(key)) dbHit = true;
+                else if (soft && dbAccounts && dbAccounts[key]) {
+                    this.matchedHandles.add(key);
+                    dbHit = true;
+                }
+                if (dbHit) {
                     this.hideArticle(article, h, 'cached match');
+                    continue;
                 }
 
                 if (this.seen.has(key)) continue;
@@ -750,29 +705,29 @@
                 this.seen.add(key);
                 this.queue.push(h);
                 queued++;
-                // Cap new API work enqueued per scan pass
-                if (queued >= 12) break;
+                if (queued >= 6) break;
             }
-            this.refreshStats();
+            // Skip expensive full re-hide pass; CSS + next tick on new nodes is enough
+            void soft;
         },
 
-        async _pump() {
-            if (this.processing) return;
+        /** Process at most one lookup, then yield. Stops completely when queue empty. */
+        _kickPump() {
+            if (!this.watching || this.processing) return;
+            if (!this.queue.length) return;
             this.processing = true;
-            try {
-                while (this.watching) {
-                    if (!this.queue.length) {
-                        // Idle sleep — do not busy-loop the main thread
-                        await Core.sleep(1200);
-                        continue;
-                    }
-                    const handle = this.queue.shift();
-                    await this.evaluateHandle(handle);
-                    await Core.sleep(this.delayMs + Core.rand(0, 250));
-                }
-            } finally {
-                this.processing = false;
-            }
+            const handle = this.queue.shift();
+            Promise.resolve()
+                .then(() => this.evaluateHandle(handle))
+                .catch(() => { })
+                .then(() => {
+                    this.processing = false;
+                    if (!this.watching || !this.queue.length) return;
+                    this._pumpTimer = setTimeout(() => {
+                        this._pumpTimer = null;
+                        this._kickPump();
+                    }, this.delayMs);
+                });
         },
 
         // ---- Region tiers / catalog ------------------------------------------
@@ -1069,12 +1024,10 @@
                 return;
             }
 
-            this.setNow('Checking @' + handle);
             let profile = this.profileCache[key];
             if (!profile) {
                 const fetched = await Core.fetchUserByScreenName(handle);
                 if (!fetched) {
-                    this.log('Lookup failed (no profile / queryId)', { handle });
                     this.setNow('@' + handle + ' — lookup failed');
                     return;
                 }
@@ -1083,15 +1036,12 @@
             }
 
             this.scannedThisSession++;
-            this.refreshStats();
+            // Throttle stat DOM writes
+            if ((this.scannedThisSession % 3) === 0) this.refreshStats();
 
-            const locLabel = (profile.location && String(profile.location).trim())
-                ? String(profile.location).trim()
-                : '(empty location)';
             const { match, reason, reasonCode, reasonNeedle } = this.matchRegion(profile);
             if (!match) {
-                this.setNow('@' + handle + ' · ' + locLabel + ' — no region match');
-                // No log line / console for misses (perf); only update status
+                this.setNow('@' + handle + ' · ' + (profile.location || 'empty') + ' — no match');
                 return;
             }
 

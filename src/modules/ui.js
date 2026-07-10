@@ -79,6 +79,11 @@
                     const chev = toggle.querySelector('.tem-dropbtn-chev');
                     if (chev) chev.classList.toggle('tem-chev-up', this.open);
                 }
+                // Lazy-build first tab content only when user opens settings
+                if (this.open && !this._didInitialTab) {
+                    this._didInitialTab = true;
+                    this.switchTab('followers');
+                }
             };
 
             this.setOpen = setOpen;
