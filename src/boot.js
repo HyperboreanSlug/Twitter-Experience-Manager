@@ -26,7 +26,10 @@
                     try { console.warn('[TEM] geo autostart failed', e1); } catch (_) { }
                 }
                 try {
-                    if (Core.store.get('likeMuteAutoStart', true)) NotifMute.startWatch();
+                    // Always default-on unless user explicitly disabled auto-start
+                    if (Core.store.get('likeMuteAutoStart', true) !== false) {
+                        NotifMute.startWatch();
+                    }
                 } catch (e2) {
                     try { console.warn('[TEM] notif autostart failed', e2); } catch (_) { }
                 }

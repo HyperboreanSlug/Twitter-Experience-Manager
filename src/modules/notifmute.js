@@ -1,12 +1,13 @@
 /**
  * @module notifmute
- * @description Mute like + retweet/repost rows on /notifications. No focus mode.
+ * @description Mute like + retweet/repost rows on /notifications. Mute toggles only.
  * @see docs/modules/notifmute.md
  */
     const NotifMute = {
         firstShow: true,
         watching: false,
         observer: null,
+        _pollTimer: null,
         hiddenThisSession: 0,
         _scanScheduled: false,
         _scanning: false,
@@ -23,15 +24,6 @@
             'liked posts you were mentioned in',
             'liked a photo you',
             'liked a video you',
-            'of your posts',
-            'of your post',
-            'of your replies',
-            'of your reply',
-            'of your reposts',
-            'of your retweets',
-            'of your quotes',
-            'of your photos',
-            'of your videos',
             'others liked your',
             'other liked your',
             'gefällt dein',
@@ -52,15 +44,11 @@
             'reposted one of your',
             'retweeted one of your',
             'others reposted your',
-            'others retweeted your',
-            'reposted posts you',
-            'retweeted posts you'
+            'others retweeted your'
         ],
 
         onShow() {
-            // Migrate: force-disable legacy focus mode so old installs stop over-hiding
             try { Core.store.set('notifFocusMode', false); } catch (_) { }
-
             if (this.firstShow) {
                 this.render();
                 this.firstShow = false;
@@ -70,10 +58,20 @@
         },
 
         _filters() {
+            // Explicit true defaults — do not inherit a false from legacy focus experiments
+            // unless the user actually set notifMuteLikes / notifMuteRetweets
+            let muteLikes = Core.store.get('notifMuteLikes', null);
+            if (muteLikes === null) {
+                const legacy = Core.store.get('likeMuteEnabled', null);
+                muteLikes = legacy === null ? true : !!legacy;
+            }
+            let muteRetweets = Core.store.get('notifMuteRetweets', null);
+            if (muteRetweets === null) muteRetweets = true;
+
             return {
-                muteLikes: Core.store.get('notifMuteLikes', Core.store.get('likeMuteEnabled', true)),
-                muteRetweets: Core.store.get('notifMuteRetweets', true),
-                autoStart: Core.store.get('likeMuteAutoStart', true)
+                muteLikes: !!muteLikes,
+                muteRetweets: !!muteRetweets,
+                autoStart: Core.store.get('likeMuteAutoStart', true) !== false
             };
         },
 
@@ -89,13 +87,13 @@
 
             pane.innerHTML = `
               <div class="tem-warn-box">
-                Client-side only: hides <em>like</em> and <em>retweet/repost</em> rows in the DOM.
-                Replies, follows, quotes, and other types stay visible.
+                Client-side only: hides <em>like</em> and <em>retweet/repost</em> notification rows.
+                Replies, follows, quotes, and everything else stay visible.
               </div>
 
               <div class="tem-section">
                 <h4>Notification mute</h4>
-                <p>On the notifications page, hide the types you mute. Nothing else is filtered.</p>
+                <p>Works on <code>/notifications</code>. Only rows that match mute rules are hidden.</p>
                 <div class="tem-stats" style="grid-template-columns:repeat(2,minmax(0,1fr))">
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-n-hidden">0</div><div class="tem-stat-l">Hidden (session)</div></div>
                   <div class="tem-stat"><div class="tem-stat-v" id="tem-n-state">Off</div><div class="tem-stat-l">Watcher</div></div>
@@ -115,7 +113,7 @@
                   <button class="tem-btn tem-btn-ghost" id="tem-n-unhide" type="button">Unhide page</button>
                 </div>
                 <div class="tem-status idle" id="tem-n-status">Idle</div>
-                <p class="tem-note">Tip: open Notifications → All for best results.</p>
+                <p class="tem-note" id="tem-n-debug">—</p>
               </div>
 
               <div class="tem-section">
@@ -130,16 +128,16 @@
               </div>
               <div class="tem-foot">Notif mute · v${Core.version}</div>`;
 
-            const bindToggle = (id, key, legacyKey) => {
+            const bindToggle = (id, key) => {
                 const el = UI.el(id);
                 if (!el) return;
                 el.onchange = () => {
                     Core.store.set(key, el.checked);
-                    if (legacyKey) Core.store.set(legacyKey, el.checked);
+                    if (key === 'notifMuteLikes') Core.store.set('likeMuteEnabled', el.checked);
                     if (this.watching) this.rescanAfterToggle();
                 };
             };
-            bindToggle('tem-n-mute-likes', 'notifMuteLikes', 'likeMuteEnabled');
+            bindToggle('tem-n-mute-likes', 'notifMuteLikes');
             bindToggle('tem-n-mute-rt', 'notifMuteRetweets');
             bindToggle('tem-n-autostart', 'likeMuteAutoStart');
 
@@ -152,8 +150,11 @@
                     .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
                 const rts = String(UI.el('tem-n-rt-patterns').value || '')
                     .split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-                Core.store.set('likeMutePatterns', likes);
-                Core.store.set('retweetMutePatterns', rts);
+                // Never persist empty pattern lists (would break filtering)
+                Core.store.set('likeMutePatterns', likes.length ? likes : this.defaultLikePatterns);
+                Core.store.set('retweetMutePatterns', rts.length ? rts : this.defaultRetweetPatterns);
+                if (!likes.length) UI.el('tem-n-patterns').value = this.defaultLikePatterns.join('\n');
+                if (!rts.length) UI.el('tem-n-rt-patterns').value = this.defaultRetweetPatterns.join('\n');
                 this.setStatus('idle', 'Patterns saved');
                 if (this.watching) this.rescanAfterToggle();
             };
@@ -163,6 +164,7 @@
                 UI.el('tem-n-patterns').value = this.defaultLikePatterns.join('\n');
                 UI.el('tem-n-rt-patterns').value = this.defaultRetweetPatterns.join('\n');
                 this.setStatus('idle', 'Patterns reset');
+                if (this.watching) this.rescanAfterToggle();
             };
 
             this.refreshStats();
@@ -170,7 +172,6 @@
             if (this.watching) this.setStatus('run', 'Watching notifications…');
         },
 
-        /** Unhide then rescan without stacking observer callbacks mid-flight */
         rescanAfterToggle() {
             this.unhideAll(true);
             this.scanDom(true);
@@ -181,6 +182,11 @@
             if (!el) return;
             el.className = 'tem-status ' + kind;
             el.textContent = text;
+        },
+
+        _setDebug(text) {
+            const el = UI.el('tem-n-debug');
+            if (el) el.textContent = text || '—';
         },
 
         refreshStats() {
@@ -194,12 +200,6 @@
                     const path = (location.pathname || '/').split('?')[0] || '/';
                     p.textContent = 'Path: ' + path;
                     p.title = path;
-                    p.style.display = 'block';
-                    p.style.overflow = 'hidden';
-                    p.style.textOverflow = 'ellipsis';
-                    p.style.whiteSpace = 'nowrap';
-                    p.style.fontFamily = 'ui-monospace,SFMono-Regular,Menlo,Consolas,monospace';
-                    p.style.fontSize = '12px';
                 } catch (_) {
                     p.textContent = 'Path: –';
                 }
@@ -213,30 +213,36 @@
             if (stop) stop.disabled = !on;
         },
 
-        _observeRoot() {
-            return document.querySelector('[data-testid="primaryColumn"]') ||
-                document.body ||
-                document.documentElement;
-        },
-
         startWatch() {
             if (this.watching) return;
             this.watching = true;
             this._setWatchUi(true);
             this.setStatus('run', 'Watching notifications…');
             this.refreshStats();
-            this.scanDom(true);
 
+            // Always observe document — primaryColumn is replaced on SPA navigations
             if (this.observer) {
                 try { this.observer.disconnect(); } catch (_) { }
             }
             this.observer = new MutationObserver(() => this.scheduleScan());
             try {
-                const root = this._observeRoot();
-                this.observer.observe(root, { childList: true, subtree: true });
+                this.observer.observe(document.documentElement || document.body, {
+                    childList: true,
+                    subtree: true
+                });
             } catch (e) {
                 console.warn('[TEM NotifMute] observer failed', e);
             }
+
+            // Backup poll: catches soft-nav to /notifications and virtualized lists
+            if (this._pollTimer) clearInterval(this._pollTimer);
+            this._pollTimer = setInterval(() => {
+                if (!this.watching) return;
+                if ((location.pathname || '').toLowerCase().indexOf('/notifications') === -1) return;
+                this.scheduleScan();
+            }, 1500);
+
+            this.scanDom(true);
         },
 
         stopWatch() {
@@ -246,13 +252,16 @@
                 try { this.observer.disconnect(); } catch (_) { }
                 this.observer = null;
             }
+            if (this._pollTimer) {
+                clearInterval(this._pollTimer);
+                this._pollTimer = null;
+            }
             this._setWatchUi(false);
             this.setStatus('idle', 'Stopped');
             this.refreshStats();
         },
 
         scheduleScan() {
-            // Prevent re-entry / observer storms while scanDom mutates the DOM
             if (!this.watching || this._scanning || this._scanScheduled) return;
             this._scanScheduled = true;
             const run = () => {
@@ -264,45 +273,61 @@
         },
 
         _norm(text) {
-            return String(text || '').toLowerCase().replace(/\s+/g, ' ').trim();
+            return String(text || '')
+                .toLowerCase()
+                .replace(/[\u200b-\u200d\ufeff]/g, '')
+                .replace(/\s+/g, ' ')
+                .trim();
         },
 
         _patternList(key, defaults) {
-            const list = Core.store.get(key, defaults) || defaults;
+            let list = Core.store.get(key, null);
+            if (!Array.isArray(list) || !list.length) list = defaults;
             return list.map(p => String(p).toLowerCase()).filter(Boolean);
         },
 
-        /** Prefer main timeline column so sidebar/cells are not mis-hidden */
+        /**
+         * Collect notification row roots. Prefer explicit notification articles;
+         * fall back to cellInnerDiv in the main column.
+         */
         _cells() {
-            const root = document.querySelector('[data-testid="primaryColumn"]') || document;
-            const primary = root.querySelectorAll('[data-testid="cellInnerDiv"]');
-            if (primary.length) return primary;
-            return root.querySelectorAll('article, [data-testid="notification"]');
+            const col = document.querySelector('[data-testid="primaryColumn"]') || document;
+            let list = col.querySelectorAll('div[data-testid="cellInnerDiv"]');
+            if (!list.length) {
+                list = col.querySelectorAll('[data-testid="notification"], article');
+            }
+            return list;
         },
 
         /**
-         * @returns {'like'|'retweet'|'other'}
+         * Richer text than textContent alone — X often puts the phrase in aria-label.
          */
-        classify(text) {
-            const t = this._norm(text);
-            if (!t) return 'other';
-
-            // Quotes are not retweets — leave visible unless they are also likes (unlikely)
-            if (/\bquoted your\b/.test(t) || /\bquoted a (post|reply|tweet)\b/.test(t)) {
-                return 'other';
-            }
-
-            if (this.isLikeNotification(t)) return 'like';
-            if (this.isRetweetNotification(t)) return 'retweet';
-            return 'other';
+        _cellText(cell) {
+            if (!cell) return '';
+            const chunks = [];
+            try {
+                const labeled = cell.querySelectorAll('[aria-label]');
+                for (let i = 0; i < labeled.length && i < 40; i++) {
+                    const a = labeled[i].getAttribute('aria-label');
+                    if (a && a.length > 2 && a.length < 400) chunks.push(a);
+                }
+            } catch (_) { }
+            chunks.push(cell.innerText || '');
+            chunks.push(cell.textContent || '');
+            return chunks.join(' \n ');
         },
 
         isLikeNotification(text) {
             const t = this._norm(text);
             if (!t) return false;
-
-            // Avoid matching pure repost rows that mention "like" in chrome
             if (/\b(reposted|retweeted)\s+your\b/.test(t) && !/\bliked\b/.test(t)) return false;
+
+            // Strong heuristics first (survive empty/corrupt pattern lists)
+            if (/\bliked your\b/.test(t)) return true;
+            if (/\bliked\s+\d+\s+of\s+your\b/.test(t)) return true;
+            if (/\bliked a (post|reply|repost|retweet|quote|photo|video)\b/.test(t) && /\byou\b/.test(t)) return true;
+            if (/\bliked\b.{0,48}\bof\s+your\s+(posts?|replies?|reposts?|retweets?|quotes?|photos?|videos?)\b/.test(t)) return true;
+            if (/\bothers liked your\b/.test(t) || /\bother liked your\b/.test(t)) return true;
 
             const hasLikeVerb = /\b(liked|likes)\b/.test(t) ||
                 t.indexOf('gefällt') !== -1 ||
@@ -313,20 +338,9 @@
             const patterns = this._patternList('likeMutePatterns', this.defaultLikePatterns);
             for (let i = 0; i < patterns.length; i++) {
                 const p = patterns[i];
-                if (t.indexOf(p) === -1) continue;
-                if (/^of your /.test(p) && !hasLikeVerb) continue;
-                return true;
-            }
-
-            if (/\bliked your\b/.test(t)) return true;
-            if (/\bliked a (post|reply|repost|retweet|quote|photo|video)\b/.test(t) && /\byou\b/.test(t)) {
-                return true;
-            }
-            if (/\bliked\s+\d+\s+of\s+your\b/.test(t)) return true;
-            if (/\bliked\b[\s\S]{0,40}\bof\s+your\s+(posts?|replies?|reposts?|retweets?|quotes?|photos?|videos?)\b/.test(t)) {
-                return true;
-            }
-            if (/\bliked\b/.test(t) && /\bof your (posts?|replies?|reposts?|retweets?|quotes?|photos?|videos?)\b/.test(t)) {
+                if (!p || t.indexOf(p) === -1) continue;
+                // "of your posts" alone is too broad without a like verb
+                if (p.indexOf('of your') === 0 && !hasLikeVerb) continue;
                 return true;
             }
             return false;
@@ -335,31 +349,35 @@
         isRetweetNotification(text) {
             const t = this._norm(text);
             if (!t) return false;
-
-            // Never treat quote or like rows as retweets
             if (/\bquoted\b/.test(t)) return false;
             if (/\bliked\b/.test(t) && !/\b(reposted|retweeted)\b/.test(t)) return false;
 
-            const patterns = this._patternList('retweetMutePatterns', this.defaultRetweetPatterns);
-            for (let i = 0; i < patterns.length; i++) {
-                if (t.indexOf(patterns[i]) !== -1) return true;
-            }
-
             if (/\b(reposted|retweeted)\s+your\b/.test(t)) return true;
             if (/\b(reposted|retweeted)\s+\d+\s+of\s+your\b/.test(t)) return true;
-            if (/\b(reposted|retweeted)\b[\s\S]{0,40}\bof\s+your\s+(posts?|replies?|tweets?)\b/.test(t)) {
-                return true;
-            }
-            if (/\b(reposted|retweeted)\b/.test(t) && /\byour (post|reply|tweet|repost)\b/.test(t)) {
-                return true;
+            if (/\b(reposted|retweeted)\b.{0,48}\bof\s+your\s+(posts?|replies?|tweets?)\b/.test(t)) return true;
+            if (/\b(reposted|retweeted)\b/.test(t) && /\byour (post|reply|tweet|repost)\b/.test(t)) return true;
+
+            const patterns = this._patternList('retweetMutePatterns', this.defaultRetweetPatterns);
+            for (let i = 0; i < patterns.length; i++) {
+                if (patterns[i] && t.indexOf(patterns[i]) !== -1) return true;
             }
             return false;
         },
 
+        /**
+         * @returns {'like'|'retweet'|null} null = do not hide
+         */
+        matchMuteKind(text) {
+            if (this.isLikeNotification(text)) return 'like';
+            if (this.isRetweetNotification(text)) return 'retweet';
+            return null;
+        },
+
         shouldHide(kind) {
+            if (!kind) return false;
             const f = this._filters();
-            if (kind === 'like' && f.muteLikes) return true;
-            if (kind === 'retweet' && f.muteRetweets) return true;
+            if (kind === 'like') return f.muteLikes;
+            if (kind === 'retweet') return f.muteRetweets;
             return false;
         },
 
@@ -373,30 +391,45 @@
                 this.refreshStats();
                 const f = this._filters();
                 const anyFilter = f.muteLikes || f.muteRetweets;
-                if (!anyFilter && !force) return;
 
                 const path = (location.pathname || '').toLowerCase();
                 const onNotifs = path.indexOf('/notifications') !== -1;
-                if (!onNotifs && !force) {
+
+                // Auto scans only on notifications; manual "scan once" can force elsewhere
+                if (!onNotifs) {
                     if (force) this.setStatus('pause', 'Open /notifications to mute');
+                    this._setDebug(onNotifs ? '' : 'Not on /notifications — idle');
                     return;
                 }
                 if (!anyFilter) {
                     if (force) this.setStatus('pause', 'Enable mute likes and/or retweets');
+                    this._setDebug('No mute toggles on');
                     return;
                 }
 
                 let newly = 0;
+                let seen = 0;
+                let likes = 0;
+                let rts = 0;
                 const cells = this._cells();
                 for (let i = 0; i < cells.length; i++) {
                     const cell = cells[i];
-                    if (cell.getAttribute('data-tem-like-hidden') === '1') continue;
+                    // Skip TEM UI if it somehow appears in column
+                    if (cell.closest && cell.closest('#tem-panel')) continue;
+                    if (cell.getAttribute('data-tem-like-hidden') === '1') {
+                        seen++;
+                        continue;
+                    }
 
-                    const text = cell.textContent || '';
+                    const text = this._cellText(cell);
                     if (!this._norm(text)) continue;
+                    seen++;
 
-                    const kind = this.classify(text);
-                    if (!this.shouldHide(kind)) continue;
+                    const kind = this.matchMuteKind(text);
+                    if (!kind || !this.shouldHide(kind)) continue;
+
+                    if (kind === 'like') likes++;
+                    if (kind === 'retweet') rts++;
 
                     cell.setAttribute('data-tem-like-hidden', '1');
                     cell.setAttribute('data-tem-notif-kind', kind);
@@ -404,19 +437,31 @@
                     newly++;
                     this.hiddenThisSession++;
                 }
+
                 this.refreshStats();
+                this._setDebug(
+                    'cells~' + cells.length +
+                    ' scanned~' + seen +
+                    ' hid+' + newly +
+                    ' (likes+' + likes + ' rt+' + rts + ')' +
+                    ' muteL=' + f.muteLikes + ' muteRT=' + f.muteRetweets
+                );
+
                 if (force || newly) {
                     this.setStatus(this.watching ? 'run' : 'idle',
-                        newly ? ('Hid ' + newly + ' notification(s)') : 'No new rows to hide');
+                        newly ? ('Hid ' + newly + ' (likes ' + likes + ', reposts ' + rts + ')') :
+                            (this.watching ? 'Watching… no new matches' : 'No matching rows'));
+                } else if (this.watching) {
+                    this.setStatus('run', 'Watching notifications…');
                 }
+            } catch (err) {
+                console.warn('[TEM NotifMute] scanDom error', err);
+                this.setStatus('stop', 'Scan error: ' + (err && err.message ? err.message : err));
             } finally {
                 this._scanning = false;
             }
         },
 
-        /**
-         * @param {boolean} [silent]
-         */
         unhideAll(silent) {
             const nodes = document.querySelectorAll('[data-tem-like-hidden="1"]');
             for (let i = 0; i < nodes.length; i++) {
