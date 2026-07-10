@@ -315,7 +315,13 @@
             ${p} #tem-close:hover{background:rgba(244,33,46,.15);color:var(--danger)}
             ${p} .tem-tabs{display:flex;align-items:stretch;gap:2px;padding:var(--space-2) var(--space-3) 0;flex:0 0 auto}
             ${p} .tem-tab{flex:1 1 0;min-width:0;min-height:36px;padding:8px 4px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);font-size:12px;font-weight:700;line-height:1.2;cursor:pointer;font-family:inherit;border-radius:8px 8px 0 0;transition:color .15s,background .15s,border-color .15s;display:inline-flex;align-items:center;justify-content:center;text-align:center}
-            [data-tem-geo-hidden="1"],[data-tem-like-hidden="1"]{display:none!important}
+            /* Geo: display none is OK (tweets). Notifs: collapse without display:none — see notifmute._hideCell */
+            [data-tem-geo-hidden="1"]{display:none!important}
+            [data-tem-like-hidden="1"]{
+              max-height:0!important;min-height:0!important;height:0!important;overflow:hidden!important;
+              opacity:0!important;margin:0!important;padding:0!important;border:0!important;
+              pointer-events:none!important;
+            }
             ${p} .tem-tab:hover{color:var(--text);background:rgba(255,255,255,.05)}
             ${p} .tem-tab.tem-active{color:var(--acc);border-bottom-color:var(--acc)}
             ${p} .tem-body{padding:var(--space-5);overflow-y:auto;flex:1 1 auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent;min-height:0}
